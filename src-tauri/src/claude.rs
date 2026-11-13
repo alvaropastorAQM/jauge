@@ -1,8 +1,8 @@
-//! Le binaire de Claude livré avec le SDK Claude Agent : relevé du forfait, état de la connexion, connexion.
+//! The Claude binary shipped with the Claude Agent SDK: plan reading, sign-in state, sign-in.
 //!
-//! Le relevé reprend exactement l'échange du SDK (relevé en espionnant sa version 0.3.319) : deux demandes de contrôle sur
-//! l'entrée standard, au format stream-json. Un processus neuf à chaque relevé, fermé juste après : il relit la connexion du
-//! trousseau à chaque fois. Gardé ouvert, il garderait des jetons périmés dès que Fil ou Claude Code renouvelle la connexion.
+//! The reading reproduces the SDK's exchange exactly (captured by spying on version 0.3.319): two control requests on
+//! standard input, in stream-json format. A fresh process for every reading, closed right after: it reads the sign-in from the
+//! keychain each time. Kept open, it would hold stale tokens as soon as Fil or Claude Code renews the sign-in.
 
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 const ARGS: [&str; 7] = [
     "--output-format", "stream-json", "--verbose", "--input-format", "stream-json", "--setting-sources=", "--no-session-persistence",
 ];
-/// shortcut: `get_usage` est marqué expérimental par le SDK (Fil s'en sert aussi) ; à revoir à chaque mise à jour du binaire.
+/// shortcut: `get_usage` is marked experimental by the SDK (Fil uses it too); to be rechecked on every binary update.
 const DEMANDES: &str = concat!(
     r#"{"request_id":"jauge-init","type":"control_request","request":{"subtype":"initialize","systemPrompt":[""]}}"#, "\n",
     r#"{"request_id":"jauge-usage","type":"control_request","request":{"subtype":"get_usage","skip_behaviors":true}}"#, "\n",
@@ -25,7 +25,7 @@ pub struct Claude {
     pub binaire: PathBuf,
 }
 
-/// Sans les variables d'une session Claude Code qui aurait lancé Jauge : sinon le binaire se croirait dans cette session.
+/// Without the variables of a Claude Code session that may have launched Jauge: otherwise the binary would think it is inside that session.
 fn env_sans_hote() -> Vec<(String, String)> {
     let hote = ["CLAUDECODE", "CLAUDE_CODE_", "CLAUDE_AGENT_SDK_", "CLAUDE_PID", "CLAUDE_EFFORT", "CLAUDE_PREVIEW_"];
     let mut env: Vec<(String, String)> = std::env::vars().filter(|(cle, _)| !hote.iter().any(|h| cle.starts_with(h))).collect();
@@ -64,11 +64,11 @@ impl Claude {
         c
     }
 
-    /// La réponse de `get_usage` : forfait et limites.
+    /// The `get_usage` response: plan and limits.
     pub fn usage(&self) -> Result<Value, String> {
-        let mut enfant = self.commande(&ARGS).spawn().map_err(|e| format!("Claude ne démarre pas ({e})."))?;
-        let mut entree = enfant.stdin.take().ok_or("Claude ne démarre pas.")?;
-        let sortie = enfant.stdout.take().ok_or("Claude ne démarre pas.")?;
+        let mut enfant = self.commande(&ARGS).spawn().map_err(|e| format!("Claude does not start ({e})."))?;
+        let mut entree = enfant.stdin.take().ok_or("Claude does not start.")?;
+        let sortie = enfant.stdout.take().ok_or("Claude does not start.")?;
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
             for ligne in BufReader::new(sortie).lines().map_while(Result::ok) {
@@ -80,22 +80,22 @@ impl Claude {
         });
         let ecrit = entree.write_all(DEMANDES.as_bytes());
         let ligne = rx.recv_timeout(Duration::from_secs(20));
-        // Entrée fermée : Claude s'arrête de lui-même ; sinon il est arrêté.
+        // Input closed: Claude stops on its own; otherwise it is stopped.
         drop(entree);
         arreter(enfant);
-        ecrit.map_err(|_| "Claude s’est arrêté avant de répondre.")?;
-        let ligne = ligne.map_err(|_| "Claude ne répond pas.")?;
-        let v: Value = serde_json::from_str(&ligne).map_err(|_| "Réponse de Claude illisible.")?;
+        ecrit.map_err(|_| "Claude stopped before answering.")?;
+        let ligne = ligne.map_err(|_| "Claude is not responding.")?;
+        let v: Value = serde_json::from_str(&ligne).map_err(|_| "Claude's response could not be read.")?;
         match v["response"]["subtype"].as_str() {
             Some("success") => Ok(v["response"]["response"].clone()),
-            _ => Err(v["response"]["error"].as_str().unwrap_or("Claude a refusé le relevé.").to_owned()),
+            _ => Err(v["response"]["error"].as_str().unwrap_or("Claude refused the request.").to_owned()),
         }
     }
 
-    /// La sortie d'une commande courte, même si elle se termine en erreur (`auth status` sort en 1 quand on est déconnecté).
+    /// The output of a short command, even if it ends in error (`auth status` exits with 1 when signed out).
     fn executer(&self, args: &[&str], delai: Duration) -> Option<String> {
         let mut enfant = self.commande(args).spawn().ok()?;
-        let _entree = enfant.stdin.take(); // gardée ouverte jusqu'au bout : `auth login` attend sans lire
+        let _entree = enfant.stdin.take(); // kept open to the end: `auth login` waits without reading
         let mut sortie = enfant.stdout.take()?;
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
@@ -107,17 +107,17 @@ impl Claude {
             let _ = enfant.kill();
             let _ = enfant.wait();
         }
-        // Borné : un processus lancé par la commande (le navigateur de `auth login`) peut garder la sortie ouverte.
+        // Bounded: a process started by the command (the browser launched by `auth login`) can keep the output open.
         rx.recv_timeout(Duration::from_secs(2)).ok()
     }
 
-    /// `None` quand on ne sait pas : on ne conclut pas à une déconnexion.
+    /// `None` when unknown: we do not conclude the user is signed out.
     pub fn est_connecte(&self) -> Option<bool> {
         let s = self.executer(&["auth", "status", "--json"], Duration::from_secs(20))?;
         serde_json::from_str::<Value>(&s).ok()?["loggedIn"].as_bool()
     }
 
-    /// La connexion officielle, comme Fil : elle s'ouvre dans le navigateur, aucun identifiant ne passe par Jauge.
+    /// The official sign-in, like Fil: it opens in the browser, no credentials go through Jauge.
     pub fn se_connecter(&self) {
         self.executer(&["auth", "login"], Duration::from_secs(5 * 60));
     }

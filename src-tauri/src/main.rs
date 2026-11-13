@@ -1,15 +1,17 @@
-//! Jauge : tes limites Claude en direct dans la barre des menus. Pas de fenêtre, pas d'icône dans le Dock.
+//! Jauge: your live Claude limits in the menu bar. No window, no Dock icon.
 //!
-//! Variables utiles :
-//!   JAUGE_ESSAI=<dossier>   auto-test : pas d'icône de barre, une capture du panneau dans ce dossier, puis quitte.
-//!   JAUGE_DEMO=1            avec JAUGE_ESSAI : données fictives, sans appeler Claude ni lire les journaux.
-//!   JAUGE_THEME=light|dark  force l'apparence (captures).
+//! Useful variables:
+//!   JAUGE_ESSAI=<folder>    self-test: no menu bar icon, a capture of the panel in this folder, then quits.
+//!   JAUGE_DEMO=1            with JAUGE_ESSAI: fake data, without calling Claude or reading the logs.
+//!   JAUGE_THEME=light|dark  forces the appearance (captures).
 
 mod barre;
 mod claude;
 mod cout;
 mod limites;
-mod macos;
+#[cfg_attr(target_os = "macos", path = "macos.rs")]
+#[cfg_attr(not(target_os = "macos"), path = "linux.rs")]
+mod systeme;
 mod rythme;
 
 use notify::{RecursiveMode, Watcher};
@@ -38,9 +40,9 @@ use rythme::{HEURE, JOUR, MINUTE};
 
 const LARGEUR: f64 = 340.0;
 const SECONDE: Duration = Duration::from_secs(1);
-const PLUS_CONNECTE: &str = "Claude Code n’est plus connecté à ton compte sur ce Mac.";
+const PLUS_CONNECTE: &str = "Claude Code is no longer signed in to your account on this computer.";
 
-/// Ce que lit le panneau (ui/js/vue.js), champ pour champ.
+/// What the panel reads (ui/js/vue.js), field by field.
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Etat {
@@ -56,9 +58,9 @@ struct Etat {
 }
 
 enum Signal {
-    /// Relevé demandé (panneau, menu, connexion) : tout de suite.
+    /// Reading requested (panel, menu, sign-in): right away.
     Actualiser,
-    /// Claude a écrit dans ses journaux : relevé si le dernier date de plus de 20 s.
+    /// Claude wrote to its logs: reading if the last one is more than 20 s old.
     Activite,
 }
 
@@ -82,7 +84,7 @@ struct Jauge {
     etait_ouvert: AtomicBool,
 }
 
-/// Un fil qui a paniqué ne doit pas bloquer les autres : on reprend la donnée telle quelle.
+/// A thread that panicked must not block the others: the data is taken as it is.
 fn verrou<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -99,12 +101,27 @@ fn journaux() -> PathBuf {
     std::env::var_os("JAUGE_JOURNAUX").map_or_else(|| dossier_maison().join(".claude/projects"), PathBuf::from)
 }
 
-/// Le même dossier que la version Electron : la reprise de l'équivalent API et la marque du premier lancement y sont déjà.
+/// The same folder as the Electron version: the saved API equivalent state and the first-launch marker are already there.
 fn dossier_donnees() -> PathBuf {
-    dossier_maison().join("Library/Application Support/Jauge")
+    if cfg!(target_os = "macos") {
+        dossier_maison().join("Library/Application Support/Jauge")
+    } else {
+        std::env::var_os("XDG_DATA_HOME").map_or_else(|| dossier_maison().join(".local/share"), PathBuf::from).join("jauge")
+    }
 }
 
-/// Taux du jour de la Banque centrale européenne (dollars pour un euro), lu dans son fichier XML.
+/// The Claude binary shipped with the SDK, as npm installed it for this machine (development builds).
+fn claude_du_sdk() -> PathBuf {
+    let os = if cfg!(target_os = "macos") { "darwin" } else { std::env::consts::OS };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "x64",
+        autre => autre,
+    };
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../node_modules/@anthropic-ai/claude-agent-sdk-{os}-{arch}/claude"))
+}
+
+/// Today's rate from the European Central Bank (dollars per euro), read from its XML file.
 fn taux_usd(xml: &str) -> Option<f64> {
     let debut = xml.find("currency='USD'").or_else(|| xml.find("currency=\"USD\""))?;
     let reste = &xml[debut..];
@@ -127,17 +144,17 @@ impl Jauge {
         let _ = self.app.emit_to("panneau", "etat", &etat);
     }
 
-    /// La barre suit la session de 5 h ; la limite la plus proche seulement si le forfait n'en a pas.
+    /// The bar follows the 5-hour session; the closest limit only if the plan has none.
     fn maj_barre(&self, etat: &Etat) {
         let Some(barre) = verrou(&self.barre).clone() else { return };
         let t = maintenant_ms();
         let limites = rythme::a_jour(&etat.limites, t);
         let p = limites.iter().find(|l| l.groupe == "session").or_else(|| rythme::plus_proche(&limites));
         let pct = p.and_then(|l| l.pourcent).map(|x| x.round() as i64);
-        // Sans relevé réussi depuis 10 min (hors ligne), l'anneau passe en gris : le chiffre n'est plus sûr.
+        // With no successful reading for 10 min (offline), the ring turns grey: the number is no longer reliable.
         let frais = etat.releve.is_some_and(|r| t - r < 10 * MINUTE);
         let ton = p.filter(|_| frais).map(|l| rythme::ton(l, t));
-        // Même chiffre, même couleur : rien à redessiner dans la barre.
+        // Same number, same colour: nothing to redraw in the bar.
         let cle = format!("{pct:?}:{ton:?}");
         {
             let mut avant = verrou(&self.dans_la_barre);
@@ -148,9 +165,9 @@ impl Jauge {
         }
         let (pixels, modele) = barre::anneau(pct.map(|x| x as f64), ton);
         let _ = barre.set_icon_with_as_template(Some(Image::new_owned(pixels, barre::COTE, barre::COTE)), modele);
-        let _ = barre.set_title(pct.map(|x| format!(" {x}\u{202f}%")));
+        let _ = barre.set_title(pct.map(|x| format!(" {x}%")));
         let _ = barre.set_tooltip(Some(match (p, pct) {
-            (Some(l), Some(x)) => format!("{} : {x}\u{202f}%", rythme::libelle(l)),
+            (Some(l), Some(x)) => format!("{}: {x}%", rythme::libelle(l)),
             _ => "Jauge".into(),
         }));
     }
@@ -161,7 +178,7 @@ impl Jauge {
             let e = verrou(&self.etat);
             (e.deconnecte, e.connexion)
         };
-        let demarrage = self.installee && macos::ouvre_au_demarrage();
+        let demarrage = self.installee && systeme::ouvre_au_demarrage();
         let cle = format!("{deconnecte}:{connexion}:{demarrage}");
         {
             let mut avant = verrou(&self.dans_le_menu);
@@ -174,12 +191,12 @@ impl Jauge {
         let menu = (|| -> tauri::Result<Menu<tauri::Wry>> {
             let menu = Menu::new(app)?;
             if deconnecte {
-                menu.append(&MenuItem::with_id(app, "connecter", "Se connecter à Claude…", !connexion, None::<&str>)?)?;
+                menu.append(&MenuItem::with_id(app, "connecter", "Sign in to Claude…", !connexion, None::<&str>)?)?;
             }
-            menu.append(&MenuItem::with_id(app, "actualiser", "Actualiser", true, None::<&str>)?)?;
-            menu.append(&CheckMenuItem::with_id(app, "demarrage", "Ouvrir au démarrage du Mac", self.installee, demarrage, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "actualiser", "Refresh", true, None::<&str>)?)?;
+            menu.append(&CheckMenuItem::with_id(app, "demarrage", "Open at login", self.installee, demarrage, None::<&str>)?)?;
             menu.append(&PredefinedMenuItem::separator(app)?)?;
-            menu.append(&MenuItem::with_id(app, "quitter", "Quitter Jauge", true, None::<&str>)?)?;
+            menu.append(&MenuItem::with_id(app, "quitter", "Quit Jauge", true, None::<&str>)?)?;
             Ok(menu)
         })();
         if let Ok(menu) = menu {
@@ -187,15 +204,15 @@ impl Jauge {
         }
     }
 
-    /* ------------------------------ Relevés ------------------------------ */
+    /* ------------------------------ Readings ------------------------------ */
 
-    /// Un relevé complet : forfait (et, au besoin, coût et taux de change). Vrai s'il a réussi.
+    /// A full reading: plan (and, if needed, cost and exchange rate). True if it succeeded.
     fn actualiser(self: &Arc<Self>) -> bool {
         *verrou(&self.dernier_essai) = Some(Instant::now());
         verrou(&self.etat).en_cours = true;
         self.diffuser();
-        // Les journaux qui bougent sont relus dès que Claude y écrit (veiller) ; ici tout le dossier toutes les 10 min,
-        // au cas où la veille en raterait un, et pour passer minuit.
+        // Logs that change are reread as soon as Claude writes to them (veiller); here the whole folder every 10 min,
+        // in case the watcher misses one, and to get past midnight.
         if verrou(&self.cout_le).is_none_or(|c| c.elapsed() > 10 * 60 * SECONDE) {
             *verrou(&self.cout_le) = Some(Instant::now());
             let _ = self.demandes_cout.send(None);
@@ -207,7 +224,7 @@ impl Jauge {
             e.en_cours = false;
             if let Err(message) = &resultat {
                 e.erreur = Some(message.clone());
-                // Des limites d'un compte déconnecté ne sont plus les tiennes : elles disparaissent.
+                // Limits from a signed-out account are no longer yours: they disappear.
                 if e.deconnecte {
                     e.limites.clear();
                 }
@@ -219,12 +236,12 @@ impl Jauge {
     }
 
     fn relever_forfait(&self) -> Result<(), String> {
-        // Le verrou est relâché avant d'interroger Claude : le panneau et la barre le lisent pendant ce temps.
+        // The lock is released before asking Claude: the panel and the bar read it in the meantime.
         let deja_deconnecte = verrou(&self.etat).deconnecte;
         if deja_deconnecte && self.claude.est_connecte() == Some(false) {
             return Err(PLUS_CONNECTE.into());
         }
-        // Une erreur ou une réponse sans limites, c'est souvent une connexion perdue : on vérifie avant de le dire.
+        // An error or a response without limits often means a lost sign-in: we check before saying so.
         let perdue = |message: String| {
             let deconnecte = self.claude.est_connecte() == Some(false);
             verrou(&self.etat).deconnecte = deconnecte;
@@ -233,7 +250,7 @@ impl Jauge {
         let r = self.claude.usage().map_err(perdue)?;
         let rl = &r["rate_limits"];
         if r["rate_limits_available"].as_bool() != Some(true) || !rl.is_object() {
-            return Err(perdue("Claude n’a pas renvoyé tes limites.".into()));
+            return Err(perdue("Claude did not return your limits.".into()));
         }
         let t = maintenant_ms();
         let mut e = verrou(&self.etat);
@@ -245,7 +262,7 @@ impl Jauge {
         Ok(())
     }
 
-    /// Le taux du jour, pour afficher l'équivalent API en euros (sinon il reste en dollars). À part : rien ne l'attend.
+    /// Today's rate, to show the API equivalent in euros (otherwise it stays in dollars). On the side: nothing waits for it.
     fn relever_taux(self: &Arc<Self>) {
         if verrou(&self.taux_le).is_some_and(|t| t.elapsed() < 12 * 3600 * SECONDE)
             || verrou(&self.taux_essai).is_some_and(|t| t.elapsed() < 600 * SECONDE)
@@ -256,7 +273,7 @@ impl Jauge {
         *verrou(&self.taux_essai) = Some(Instant::now());
         let j = self.clone();
         thread::spawn(move || {
-            // Borné à 15 s : une connexion à moitié ouverte (réveil, portail Wi-Fi) ne doit rien bloquer.
+            // Bounded to 15 s: a half-open connection (wake-up, Wi-Fi portal) must not block anything.
             let xml = Command::new("/usr/bin/curl")
                 .args(["-sfL", "--max-time", "15", "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"])
                 .output()
@@ -300,7 +317,7 @@ impl Jauge {
         if let Some(r) = rect {
             placer(&f, r);
         }
-        // Comptes à rebours et repères remis à l'heure avant l'affichage : un panneau caché ne se redessine presque plus.
+        // Countdowns and ticks brought up to date before showing: a hidden panel hardly redraws at all.
         self.diffuser();
         let _ = f.show();
         let _ = f.set_focus();
@@ -319,7 +336,7 @@ impl Jauge {
     }
 }
 
-/// Sous l'icône, centré, sans sortir de l'écran.
+/// Under the icon, centred, without leaving the screen.
 fn placer(f: &WebviewWindow, r: Rect) {
     let echelle = f.scale_factor().unwrap_or(2.0);
     let pos = r.position.to_physical::<f64>(echelle);
@@ -336,9 +353,9 @@ fn placer(f: &WebviewWindow, r: Rect) {
     let _ = f.set_position(PhysicalPosition::new(x.round() as i32, (pos.y + taille.height + 4.0 * echelle).round() as i32));
 }
 
-/* ------------------------------ Fils de fond ------------------------------ */
+/* ------------------------------ Background threads ------------------------------ */
 
-/// Un fil de fond qui panique (bug imprévu) repart 5 s plus tard : la jauge ne reste jamais figée sans rien dire.
+/// A background thread that panics (unexpected bug) restarts 5 s later: the gauge never stays frozen without saying anything.
 fn relancer_si_panique(mut corps: impl FnMut() + Send + 'static) {
     thread::spawn(move || loop {
         if std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut corps)).is_ok() {
@@ -348,9 +365,9 @@ fn relancer_si_panique(mut corps: impl FnMut() + Send + 'static) {
     });
 }
 
-/// Le rythme des relevés : chaque minute ; après un échec, toutes les 30 s juste après le lancement ou un réveil (réseau pas
-/// encore prêt) et tant que la connexion manque, sinon toutes les 3 min. Chaque relevé lance un processus Claude (~0,7 s de
-/// calcul) : Mac verrouillé ou sans toi depuis 5 min, un toutes les 5 min suffit.
+/// The pace of readings: every minute; after a failure, every 30 s right after launch or a wake-up (network not
+/// ready yet) and while the sign-in is missing, otherwise every 3 min. Each reading starts a Claude process (~0.7 s of
+/// compute): with the computer locked or you away for 5 min, one every 5 min is enough.
 fn planificateur(j: Arc<Jauge>, rx: &Receiver<Signal>) {
     let mut prochain = Instant::now();
     let mut vite_jusqua = Instant::now() + 600 * SECONDE;
@@ -363,19 +380,19 @@ fn planificateur(j: Arc<Jauge>, rx: &Receiver<Signal>) {
             Err(RecvTimeoutError::Timeout) => None,
             Err(RecvTimeoutError::Disconnected) => return,
         };
-        // Réveil du Mac : l'horloge murale a avancé pendant la veille, l'horloge monotone non.
+        // Wake-up from sleep: the wall clock moved forward during sleep, the monotonic clock did not.
         let (mur2, mono2) = (SystemTime::now(), Instant::now());
         let reveil = mur2.duration_since(mur).unwrap_or_default().saturating_sub(mono2 - mono) > 30 * SECONDE;
         (mur, mono) = (mur2, mono2);
         if reveil {
             vite_jusqua = mono2 + 300 * SECONDE;
-            // Ces délais ne comptent pas la veille : la nuit passée, tout est à relire (et « aujourd'hui » a changé).
+            // These delays do not count sleep: after the night, everything must be reread (and "today" has changed).
             *verrou(&j.cout_le) = None;
             *verrou(&j.taux_le) = None;
             *verrou(&j.taux_essai) = None;
         }
-        // Retour devant le Mac après 5 min d'absence (déverrouillage compris) : relevé tout de suite.
-        let inactif = macos::inactif_depuis();
+        // Back at the computer after 5 min away (unlocking included): reading right away.
+        let inactif = systeme::inactif_depuis();
         let absent = inactif >= 300.0;
         let retour = absent_avant && inactif < 10.0;
         absent_avant = absent;
@@ -392,15 +409,15 @@ fn planificateur(j: Arc<Jauge>, rx: &Receiver<Signal>) {
             continue;
         }
         let reussi = j.actualiser();
-        // Les demandes arrivées pendant le relevé sont servies par lui.
+        // Requests that arrived during the reading are served by it.
         while rx.try_recv().is_ok() {}
         let vite = verrou(&j.etat).deconnecte || Instant::now() < vite_jusqua;
         prochain = Instant::now() + if reussi { 60 * SECONDE } else if vite { 30 * SECONDE } else { 180 * SECONDE };
     }
 }
 
-/// L'équivalent API, dans un fil à part : le premier passage peut lire des Go de journaux, la barre n'a pas à attendre.
-/// Les demandes arrivées pendant un passage sont regroupées dans le suivant.
+/// The API equivalent, in a separate thread: the first pass may read GBs of logs, the bar does not have to wait.
+/// Requests that arrive during a pass are grouped into the next one.
 fn fil_cout(j: Arc<Jauge>, rx: &Receiver<Option<Vec<PathBuf>>>, reprise: Option<PathBuf>) {
     let mut releveur = Releveur::new(journaux());
     if let Some(p) = &reprise {
@@ -420,7 +437,7 @@ fn fil_cout(j: Arc<Jauge>, rx: &Receiver<Option<Vec<PathBuf>>>, reprise: Option<
         let bilan = releveur.relever(maintenant_ms(), if tout { None } else { Some(&liste) });
         verrou(&j.etat).cout = Some(bilan);
         j.diffuser();
-        // Sauvé après le premier passage, puis toutes les 10 min au plus : au pire, le prochain lancement relit ces 10 min.
+        // Saved after the first pass, then every 10 min at most: at worst, the next launch rereads those 10 min.
         if let Some(p) = &reprise {
             if releveur.change && sauve_le.is_none_or(|s| s.elapsed() > 600 * SECONDE) {
                 if let Some(d) = p.parent() {
@@ -433,8 +450,8 @@ fn fil_cout(j: Arc<Jauge>, rx: &Receiver<Option<Vec<PathBuf>>>, reprise: Option<
     }
 }
 
-/// Claude écrit dans ses journaux à chaque réponse : la jauge suit sans attendre la minute (limites au plus toutes les 20 s),
-/// et l'équivalent API ne relit que les journaux qui ont bougé.
+/// Claude writes to its logs on every response: the gauge follows without waiting for the minute (limits every 20 s at most),
+/// and the API equivalent only rereads the logs that changed.
 fn veiller(j: Arc<Jauge>) {
     thread::spawn(move || loop {
         let (tx, rx) = mpsc::channel::<Option<PathBuf>>();
@@ -469,12 +486,12 @@ fn veiller(j: Arc<Jauge>) {
                 }
             }
         }
-        // Pas encore de dossier des projets (Claude Code le créera) ou veille en panne : nouvel essai dans une minute.
+        // No projects folder yet (Claude Code will create it) or the watcher failed: try again in a minute.
         thread::sleep(60 * SECONDE);
     });
 }
 
-/* ------------------------------ Échanges avec le panneau ------------------------------ */
+/* ------------------------------ Exchanges with the panel ------------------------------ */
 
 #[tauri::command]
 fn etat(j: State<'_, Arc<Jauge>>) -> Etat {
@@ -491,7 +508,7 @@ fn connecter(j: State<'_, Arc<Jauge>>) {
     j.se_connecter();
 }
 
-/// Le panneau prend la hauteur de son contenu.
+/// The panel takes the height of its content.
 #[tauri::command]
 fn hauteur(h: f64, fenetre: WebviewWindow) {
     if h.is_finite() {
@@ -499,7 +516,7 @@ fn hauteur(h: f64, fenetre: WebviewWindow) {
     }
 }
 
-/* ------------------------------ Auto-test ------------------------------ */
+/* ------------------------------ Self-test ------------------------------ */
 
 fn donnees_demo(j: &Jauge) {
     let t = maintenant_ms();
@@ -521,7 +538,7 @@ fn donnees_demo(j: &Jauge) {
     };
 }
 
-/// Affiche le panneau, attend les vrais chiffres (ou la démo), le capture, écrit l'état sur la sortie et quitte.
+/// Shows the panel, waits for the real numbers (or the demo), captures it, writes the state to the output and quits.
 fn essai(j: Arc<Jauge>, dossier: PathBuf, demo: bool, theme: Option<Theme>) {
     thread::spawn(move || {
         if demo {
@@ -536,7 +553,7 @@ fn essai(j: Arc<Jauge>, dossier: PathBuf, demo: bool, theme: Option<Theme>) {
                 }
             };
             attendre(&|e| e.releve.is_some() || e.erreur.is_some(), 60);
-            // Le premier passage dans les journaux peut être long.
+            // The first pass over the logs can take a while.
             attendre(&|e| e.cout.is_some(), 120);
         }
         if let Some(f) = j.panneau() {
@@ -561,7 +578,7 @@ fn essai(j: Arc<Jauge>, dossier: PathBuf, demo: bool, theme: Option<Theme>) {
     });
 }
 
-/* ------------------------------ Démarrage ------------------------------ */
+/* ------------------------------ Startup ------------------------------ */
 
 fn creer_panneau(app: &AppHandle, essai: bool, theme: Option<Theme>) -> tauri::Result<WebviewWindow> {
     let mut b = WebviewWindowBuilder::new(app, "panneau", WebviewUrl::App("index.html".into()))
@@ -577,9 +594,18 @@ fn creer_panneau(app: &AppHandle, essai: bool, theme: Option<Theme>) -> tauri::R
         .theme(theme);
     b = if essai {
         b.initialization_script("window.JAUGE_ESSAI = true;").position(40.0, 60.0)
-    } else {
-        // Le verre de macOS (comme les panneaux des icônes système), aux coins arrondis.
+    } else if cfg!(target_os = "macos") {
+        // The macOS glass (like the panels of the system icons), with rounded corners.
         b.transparent(true).shadow(true).effects(EffectsBuilder::new().effect(Effect::Popover).state(EffectState::Active).radius(12.0).build())
+    } else {
+        // Without a tray (WSLg has none), the panel is an ordinary window that stays open.
+        b.initialization_script("window.JAUGE_OPAQUE = true;")
+            .visible(true)
+            .focused(true)
+            .decorations(true)
+            .always_on_top(false)
+            .skip_taskbar(false)
+            .visible_on_all_workspaces(false)
     };
     b.build()
 }
@@ -594,7 +620,7 @@ fn main() {
     };
     let mut builder = tauri::Builder::default();
     if essai_dans.is_none() {
-        // Une seule Jauge : une seconde ouverture montre le panneau de la première, puis s'arrête.
+        // A single Jauge: a second launch shows the first one's panel, then stops.
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _dossier| {
             if let Some(j) = app.try_state::<Arc<Jauge>>() {
                 j.basculer();
@@ -604,13 +630,19 @@ fn main() {
     let app = builder
         .invoke_handler(tauri::generate_handler![etat, actualiser, connecter, hauteur])
         .setup(move |app| {
+            #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let exe = std::env::current_exe()?;
-            let installee = exe.to_string_lossy().contains(".app/Contents/MacOS/");
-            let binaire = if installee {
-                exe.parent().and_then(|p| p.parent()).map(|c| c.join("Resources/claude")).unwrap_or_default()
+            // Installed: inside Jauge.app on a Mac; on Linux, the Claude binary copied next to the executable.
+            let installee = if cfg!(target_os = "macos") {
+                exe.to_string_lossy().contains(".app/Contents/MacOS/")
             } else {
-                PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../node_modules/@anthropic-ai/claude-agent-sdk-darwin-arm64/claude"))
+                exe.with_file_name("claude").exists()
+            };
+            let binaire = match (installee, cfg!(target_os = "macos")) {
+                (true, true) => exe.parent().and_then(|p| p.parent()).map(|c| c.join("Resources/claude")).unwrap_or_default(),
+                (true, false) => exe.with_file_name("claude"),
+                (false, _) => claude_du_sdk(),
             };
             let (signaux, rx_signaux) = mpsc::channel();
             let (demandes_cout, rx_cout) = mpsc::channel();
@@ -636,13 +668,14 @@ fn main() {
             app.manage(j.clone());
 
             let fenetre = creer_panneau(app.handle(), j.essai, theme)?;
+            #[cfg(target_os = "macos")]
             if let Ok(ns) = fenetre.ns_window() {
-                macos::regler_panneau(ns);
+                systeme::regler_panneau(ns);
             }
             let jf = j.clone();
             fenetre.on_window_event(move |ev| {
                 if let WindowEvent::Focused(false) = ev {
-                    if !jf.essai {
+                    if !jf.essai && cfg!(target_os = "macos") {
                         if let Some(f) = jf.panneau() {
                             let _ = f.hide();
                         }
@@ -662,68 +695,10 @@ fn main() {
                 return Ok(());
             }
 
-            let (pixels, _) = barre::anneau(None, None);
-            let barre = TrayIconBuilder::with_id("jauge")
-                .icon(Image::new_owned(pixels, barre::COTE, barre::COTE))
-                .icon_as_template(true)
-                .tooltip("Jauge")
-                .show_menu_on_left_click(false)
-                .on_tray_icon_event(|barre, ev| {
-                    let TrayIconEvent::Click { button: MouseButton::Left, button_state, rect, .. } = ev else { return };
-                    let Some(j) = barre.app_handle().try_state::<Arc<Jauge>>() else { return };
-                    // Un clic sur l'icône quand le panneau est ouvert le ferme d'abord (perte du focus) : il ne doit pas
-                    // se rouvrir au relâchement.
-                    match button_state {
-                        MouseButtonState::Down => {
-                            let ouvert = j.panneau().is_some_and(|f| f.is_visible().unwrap_or(false))
-                                || verrou(&j.ferme_le).is_some_and(|f| f.elapsed() < Duration::from_millis(400));
-                            j.etait_ouvert.store(ouvert, Ordering::SeqCst);
-                        }
-                        MouseButtonState::Up => {
-                            if j.etait_ouvert.load(Ordering::SeqCst) {
-                                if let Some(f) = j.panneau() {
-                                    let _ = f.hide();
-                                }
-                            } else {
-                                j.ouvrir(Some(rect));
-                            }
-                        }
-                    }
-                })
-                .on_menu_event(|app, ev| {
-                    let Some(j) = app.try_state::<Arc<Jauge>>() else { return };
-                    match ev.id().as_ref() {
-                        "actualiser" => j.signal(Signal::Actualiser),
-                        "connecter" => j.se_connecter(),
-                        "demarrage" => {
-                            let _ = macos::ouvrir_au_demarrage(!macos::ouvre_au_demarrage());
-                            // Le menu est refait même si rien n'a changé (échec) : la coche suit l'état réel.
-                            verrou(&j.dans_le_menu).clear();
-                            j.maj_menu();
-                        }
-                        "quitter" => app.exit(0),
-                        _ => {}
-                    }
-                })
-                .build(app)?;
-            let _ = barre.with_inner_tray_icon(|b| {
-                if let Some(item) = b.ns_status_item() {
-                    macos::regler_icone(&item);
-                }
-            });
-            *verrou(&j.barre) = Some(barre);
-            j.maj_menu();
-            j.diffuser();
-
-            // Premier lancement de l'app installée : elle s'ouvrira avec le Mac. Décocher dans le menu reste ton choix.
             let donnees = dossier_donnees();
-            let marque = donnees.join("premier-lancement-fait");
-            if installee && !marque.exists() {
-                let _ = macos::ouvrir_au_demarrage(true);
-                let _ = fs::create_dir_all(&donnees);
-                let _ = fs::write(&marque, "");
-                j.maj_menu();
-            }
+            #[cfg(target_os = "macos")]
+            installer_barre(app, &j, &donnees)?;
+            j.diffuser();
 
             let jp = j.clone();
             relancer_si_panique(move || planificateur(jp.clone(), &rx_signaux));
@@ -734,13 +709,83 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("Jauge ne démarre pas");
-    // Jauge vit dans la barre des menus : cacher le panneau ne la quitte pas, seul « Quitter Jauge » le fait.
+        .expect("Jauge failed to start");
+    // Jauge lives in the menu bar: hiding the panel does not quit it, only "Quit Jauge" does.
+    // On Linux the panel is a plain window, and closing it quits.
     app.run(|_app, ev| {
         if let RunEvent::ExitRequested { api, code: None, .. } = ev {
-            api.prevent_exit();
+            if cfg!(target_os = "macos") {
+                api.prevent_exit();
+            }
         }
     });
+}
+
+/// The menu bar icon, its menu, and opening at login on the first launch of the installed app.
+#[cfg(target_os = "macos")]
+fn installer_barre(app: &tauri::App, j: &Arc<Jauge>, donnees: &std::path::Path) -> tauri::Result<()> {
+    let installee = j.installee;
+    let (pixels, _) = barre::anneau(None, None);
+    let barre = TrayIconBuilder::with_id("jauge")
+        .icon(Image::new_owned(pixels, barre::COTE, barre::COTE))
+        .icon_as_template(true)
+        .tooltip("Jauge")
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|barre, ev| {
+            let TrayIconEvent::Click { button: MouseButton::Left, button_state, rect, .. } = ev else { return };
+            let Some(j) = barre.app_handle().try_state::<Arc<Jauge>>() else { return };
+            // A click on the icon while the panel is open closes it first (focus loss): it must not
+            // reopen on release.
+            match button_state {
+                MouseButtonState::Down => {
+                    let ouvert = j.panneau().is_some_and(|f| f.is_visible().unwrap_or(false))
+                        || verrou(&j.ferme_le).is_some_and(|f| f.elapsed() < Duration::from_millis(400));
+                    j.etait_ouvert.store(ouvert, Ordering::SeqCst);
+                }
+                MouseButtonState::Up => {
+                    if j.etait_ouvert.load(Ordering::SeqCst) {
+                        if let Some(f) = j.panneau() {
+                            let _ = f.hide();
+                        }
+                    } else {
+                        j.ouvrir(Some(rect));
+                    }
+                }
+            }
+        })
+        .on_menu_event(|app, ev| {
+            let Some(j) = app.try_state::<Arc<Jauge>>() else { return };
+            match ev.id().as_ref() {
+                "actualiser" => j.signal(Signal::Actualiser),
+                "connecter" => j.se_connecter(),
+                "demarrage" => {
+                    let _ = systeme::ouvrir_au_demarrage(!systeme::ouvre_au_demarrage());
+                    // The menu is rebuilt even if nothing changed (failure): the checkmark follows the real state.
+                    verrou(&j.dans_le_menu).clear();
+                    j.maj_menu();
+                }
+                "quitter" => app.exit(0),
+                _ => {}
+            }
+        })
+        .build(app)?;
+    let _ = barre.with_inner_tray_icon(|b| {
+        if let Some(item) = b.ns_status_item() {
+            systeme::regler_icone(&item);
+        }
+    });
+    *verrou(&j.barre) = Some(barre);
+    j.maj_menu();
+
+    // First launch of the installed app: it will open at login. Unchecking it in the menu remains your choice.
+    let marque = donnees.join("premier-lancement-fait");
+    if installee && !marque.exists() {
+        let _ = systeme::ouvrir_au_demarrage(true);
+        let _ = fs::create_dir_all(donnees);
+        let _ = fs::write(&marque, "");
+        j.maj_menu();
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -750,8 +795,8 @@ mod tests {
         let xml = "<Cube time='2026-11-11'><Cube currency='USD' rate='1.1193'/><Cube currency='JPY' rate='170.2'/></Cube>";
         assert_eq!(super::taux_usd(xml), Some(1.1193));
         assert_eq!(super::taux_usd(r#"<Cube currency="USD" rate="1.05"/>"#), Some(1.05));
-        assert_eq!(super::taux_usd("<rien/>"), None);
-        // Fichier coupé juste après « rate= » : pas de panique.
+        assert_eq!(super::taux_usd("<nothing/>"), None);
+        // File cut right after "rate=": no panic.
         assert_eq!(super::taux_usd("<Cube currency='USD' rate="), None);
     }
 }

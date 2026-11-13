@@ -1,7 +1,7 @@
-/* Design « Graphite » (design_system_macos27.md de Tracker, Fil et Sablier), variante graphite pur comme Fil et Tracker.
-   Panneau de niveau 4 (verre de macOS). Les couleurs des limites sont celles de Fil : chiffres neutres, seul le voile de la barre
-   dit la marge (vert) ou l'avance sur le temps (jaune, rouge).
-   Le sombre et le clair suivent le Mac. */
+/* "Graphite" design (design_system_macos27.md of Tracker, Fil and Sablier), pure graphite variant like Fil and Tracker.
+   Level 4 panel (macOS glass). The limit colours are Fil's: neutral numbers, only the veil on the bar
+   shows the margin (green) or being ahead of the clock (yellow, red).
+   Dark and light follow the system. */
 
 :root {
   color-scheme: dark;
@@ -29,7 +29,7 @@
   --repere-contour: rgba(36,36,40,0.95);
 
   --spring-apple: cubic-bezier(0.22, 1, 0.36, 1);
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: light) {
@@ -61,8 +61,8 @@
 
 * { box-sizing: border-box; margin: 0; }
 html { background: var(--surface-floating); }
-/* Dans l'app, le flou vient de la fenêtre (vibrancy) ; un voile presque opaque par-dessus garde le texte lisible sur n'importe quel fond d'écran. */
-/* La fenêtre est transparente : le voile suit les coins arrondis du verre (12 px). */
+/* In the app, the blur comes from the window (vibrancy); a nearly opaque veil on top keeps the text readable on any wallpaper. */
+/* The window is transparent: the veil follows the rounded corners of the glass (12 px). */
 html.vibrance { background: transparent; }
 html.vibrance body { min-height: 100vh; border-radius: 12px; background: var(--fond-verre); }
 body {
@@ -72,7 +72,7 @@ body {
 
 .panneau { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px 8px; }
 
-/* ---------- En-tête ---------- */
+/* ---------- Header ---------- */
 
 .tete { display: flex; align-items: center; justify-content: space-between; height: 22px; padding: 0 2px; }
 .marque { display: flex; align-items: center; gap: 7px; }
@@ -88,11 +88,11 @@ body {
 .direct.frais { color: var(--text-secondary); }
 .voyant { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
 .direct.frais .voyant { background: var(--positive); }
-/* Pulsation seulement pendant un relevé. */
+/* Pulse only while a reading is in progress. */
 .direct.actif .voyant { animation: pulsation 1.2s ease-in-out infinite; }
 @keyframes pulsation { 50% { opacity: 0.3; } }
 
-/* ---------- Résumé ---------- */
+/* ---------- Summary ---------- */
 
 .resume { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 2px; }
 .kpi-libelle { font-size: 12px; color: var(--text-secondary); }
@@ -103,7 +103,7 @@ body {
 .kpi-contexte { font-size: 11.5px; line-height: 1.4; color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: pre-line; }
 .unite { font-size: 0.6em; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
 
-/* ---------- Limites ---------- */
+/* ---------- Limits ---------- */
 
 .limites { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .carte {
@@ -111,7 +111,7 @@ body {
   box-shadow: 0 0 0 1px var(--border-subtle), var(--specular-top);
 }
 .carte.grande { grid-column: 1 / -1; padding: 11px 12px 10px; }
-/* Une petite carte seule sur sa ligne prend toute la largeur : pas de trou à droite. */
+/* A small card alone on its row takes the full width: no gap on the right. */
 .carte.petite:nth-child(odd of .carte.petite):last-child { grid-column: 1 / -1; }
 .carte-haut { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .carte-nom { overflow: hidden; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; text-overflow: ellipsis; }
@@ -121,14 +121,14 @@ body {
 
 .piste { position: relative; height: 6px; margin: 9px 0 8px; border-radius: 3px; background: var(--chart-track); }
 .carte.grande .piste { height: 8px; margin: 11px 0 9px; border-radius: 4px; }
-/* Comme dans Fil : l'utilisation en blanc, puis un voile jusqu'au trait du temps écoulé (ou au-delà). */
+/* As in Fil: usage in white, then a veil up to the elapsed-time tick (or beyond). */
 .rempli, .voile { position: absolute; top: 0; bottom: 0; transition: width 620ms var(--spring-apple), left 620ms var(--spring-apple), background 400ms ease; }
 .rempli { left: 0; border-radius: 3px 0 0 3px; background: var(--serie); }
 .voile { background: color-mix(in srgb, var(--serie) 55%, transparent); }
 .voile.marge { background: linear-gradient(90deg, color-mix(in srgb, var(--positive) 42%, transparent), color-mix(in srgb, var(--positive) 20%, transparent)); }
 .voile.attention { background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 62%, transparent), color-mix(in srgb, var(--warning) 36%, transparent)); }
 .voile.mauvais { background: linear-gradient(90deg, color-mix(in srgb, var(--negative) 66%, transparent), color-mix(in srgb, var(--negative) 40%, transparent)); }
-/* Le repère du temps écoulé : là où l'utilisation devrait être si elle suivait le temps. */
+/* The elapsed-time tick: where usage would be if it followed the clock. */
 .repere {
   position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px;
   background: var(--text-primary); box-shadow: 0 0 0 1.5px var(--repere-contour);
@@ -149,7 +149,7 @@ body {
 .etat-vide.erreur { color: var(--warning); }
 .connexion { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 6px; }
 .connexion .etat-vide { padding-bottom: 6px; }
-/* Bouton primaire du design Graphite (accent graphite pur : blanc en sombre, noir en clair). */
+/* Primary button of the Graphite design (pure graphite accent: white in dark, black in light). */
 .btn-primaire {
   height: 30px; padding: 0 14px; border: 0; border-radius: 8px; font: 500 13px var(--font-ui);
   background: var(--text-primary); color: var(--surface-floating); opacity: 1;
@@ -159,7 +159,7 @@ body {
 .btn-primaire:disabled { opacity: 0.5; }
 .btn-primaire:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent-rim), 0 0 0 3px var(--accent-soft); }
 
-/* ---------- Pied ---------- */
+/* ---------- Footer ---------- */
 
 .pied {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;

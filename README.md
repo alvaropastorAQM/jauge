@@ -1,25 +1,25 @@
 # Jauge
 
-Tes limites Claude en direct dans la barre des menus : un anneau et le pourcentage de ta session de 5 h. Un clic ouvre le détail, un clic droit le menu (actualiser, ouverture au démarrage, quitter). Pas de fenêtre, pas d'icône dans le Dock.
+Your live Claude limits in the menu bar: a ring and the percentage of your 5-hour session. A click opens the details, a right click opens the menu (refresh, open at login, quit). No window, no Dock icon.
 
-Construite avec Tauri : le fond en Rust (`src-tauri/`), le panneau en HTML, CSS et JavaScript (`ui/`), affiché par le WebKit de macOS. Environ 90 Mo de mémoire en tout, contre 195 Mo pour l'ancienne version Electron.
+Built with Tauri: the back end in Rust (`src-tauri/`), the panel in HTML, CSS and JavaScript (`ui/`), rendered by the WebKit of macOS. About 90 MB of memory in total, against 195 MB for the old Electron version.
 
-## Ce qu'elle montre
+## What it shows
 
-- **Session de 5 h, semaine, et limites par modèle** (Fable) : pourcentage, heure de remise à zéro, compte à rebours.
-- **Le rythme, comme dans Fil :** la partie blanche de chaque barre est ce que tu as utilisé, le trait le temps écoulé dans la fenêtre. Entre les deux, un voile vert quand il te reste de la marge, jaune quand tu es en avance sur le temps, rouge à 15 points d'avance ou plus.
-- **L'équivalent API :** ce qu'aurait coûté ta consommation au tarif de l'API, depuis le premier échange lu dans tes journaux, et la part d'aujourd'hui.
+- **5-hour session, week, and per-model limits** (Fable): percentage, reset time, countdown.
+- **The pace, as in Fil:** the white part of each bar is what you have used, the tick is the time elapsed in the window. Between the two, a veil: green when you have room to spare, yellow when you are ahead of the clock, red at 15 points ahead or more.
+- **The API equivalent:** what your usage would have cost at API prices, since the first message read in your logs, and today's share.
 
-Les chiffres restent neutres : seule la barre porte la couleur. L'anneau de la barre des menus prend la couleur du voile de la session (orange à la place du jaune, plus lisible en haut de l'écran).
+The numbers stay neutral: only the bar carries colour. The menu bar ring takes the colour of the session's veil (orange instead of yellow, more readable at the top of the screen).
 
-## D'où viennent les chiffres
+## Where the numbers come from
 
-- **Limites :** le binaire de Claude livré avec le SDK Claude Agent (0.3.319, épinglé dans `package.json`), avec la connexion Claude Code du Mac. Jauge lui envoie la même demande que le SDK (`get_usage`, marquée expérimentale) : à revérifier si tu mets le SDK à jour. Relevé chaque minute, et dès que Claude écrit dans ses journaux (au plus toutes les 20 s), au réveil du Mac, à ton retour et à l'ouverture du panneau. Mac verrouillé ou sans toi depuis 5 min : un relevé toutes les 5 min. À l'heure de remise à zéro, la limite repart de 0 sans attendre le relevé. Sans relevé réussi depuis 10 min, l'anneau passe en gris.
-- **Équivalent API :** les journaux de `~/.claude/projects`, aux tarifs publics relevés au 06/10/2026 dans `src-tauri/src/cout.rs` (à mettre à jour si Anthropic change ses prix), converti en euros au taux du jour de la BCE. Seuls les journaux qui bougent sont relus ; la position de lecture est gardée dans `~/Library/Application Support/Jauge/equivalent-api.json`, ce qui évite de tout relire à chaque démarrage. Un journal effacé par Claude Code reste compté.
+- **Limits:** the Claude binary shipped with the Claude Agent SDK (0.3.319, pinned in `package.json`), using the Claude Code sign-in of the computer. Jauge sends it the same request as the SDK (`get_usage`, marked experimental): check it again if you update the SDK. Read every minute, and as soon as Claude writes to its logs (every 20 s at most), when the Mac wakes up, when you come back and when the panel opens. With the Mac locked or you away for 5 min: one reading every 5 min. At the reset time, the limit starts again from 0 without waiting for a reading. With no successful reading for 10 min, the ring turns grey.
+- **API equivalent:** the logs in `~/.claude/projects`, at the public prices as of 06/10/2026 in `src-tauri/src/cout.rs` (to be updated if Anthropic changes its prices), converted to euros at the ECB rate of the day. Only the logs that change are reread; the read position is kept in `~/Library/Application Support/Jauge/equivalent-api.json`, which avoids rereading everything at each start. A log deleted by Claude Code is still counted.
 
-## Installer ou reconstruire
+## Install or rebuild (macOS)
 
-Il faut Node.js 22, Rust et les outils Xcode.
+You need Node.js 22, Rust and the Xcode tools.
 
 ```bash
 npm install
@@ -29,12 +29,46 @@ npm install
 npm run install-app
 ```
 
-La seconde commande lance les tests, construit `Jauge.app`, la vérifie, la place dans `/Applications` et l'ouvre. Au premier lancement, elle s'inscrit pour s'ouvrir avec le Mac (décochable dans le menu du clic droit).
+The second command runs the tests, builds `Jauge.app`, checks it, places it in `/Applications` and opens it. On the first launch, it registers itself to open at login (it can be unchecked in the right-click menu).
 
-## Si l'icône n'apparaît pas
+## Linux (WSL)
 
-Au premier lancement, Jauge se place à côté de la batterie, du côté visible de l'encoche (`PLACE_BARRE` dans `src-tauri/src/macos.rs`). Sur un Mac à encoche, la barre n'a pas de place pour tout : c'est alors une autre icône qui passe derrière le chevron « « ». Pour changer la place de Jauge, glisse l'anneau en tenant ⌘ ; macOS la retient.
+Jauge also runs on Linux, including WSL2 with WSLg.
 
-## Tester
+Requirements:
 
-`npm test` vérifie les calculs du panneau (JavaScript) et du fond (Rust). `JAUGE_ESSAI=<dossier> JAUGE_DEMO=1 src-tauri/target/release/jauge` capture le panneau avec des données fictives ; sans `JAUGE_DEMO`, avec tes vrais chiffres.
+- Node.js 22
+- Rust, installed with [rustup](https://rustup.rs)
+- The system libraries:
+
+```bash
+sudo apt install pkg-config build-essential libssl-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+Then:
+
+```bash
+npm install
+```
+
+```bash
+npm run install-app:linux
+```
+
+The second command runs the tests, builds Jauge, installs it in `~/.local/opt/jauge` with the SDK's Claude binary next to it, and registers a `.desktop` entry, which WSLg also lists in the Windows Start menu.
+
+What differs from the Mac version:
+
+- There is no tray (WSLg has none): the panel is a normal window, and closing it quits Jauge.
+- There is no idle detection, so Jauge always counts as present and reads every minute.
+- There is no "open at login".
+- Data lives in `~/.local/share/jauge`.
+- The Claude sign-in is the one Claude Code keeps in `~/.claude`.
+
+## If the icon does not appear (macOS)
+
+On the first launch, Jauge places itself next to the battery, on the visible side of the notch (`PLACE_BARRE` in `src-tauri/src/macos.rs`). On a Mac with a notch, the bar does not have room for everything: another icon then goes behind the chevron "<<". To change Jauge's position, drag the ring while holding ⌘; macOS remembers it.
+
+## Testing
+
+`npm test` checks the panel calculations (JavaScript) and the back end (Rust). `JAUGE_ESSAI=<folder> JAUGE_DEMO=1 src-tauri/target/release/jauge` captures the panel with fake data; without `JAUGE_DEMO`, with your real numbers.

@@ -1,10 +1,11 @@
-/* Relie le panneau à Jauge (Tauri) : les mêmes fonctions que la version Electron, vue.js n'a pas changé. */
+/* Connects the panel to Jauge (Tauri): the same functions as the Electron version, vue.js has not changed. */
 'use strict';
 (function () {
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
-  /* Dans l'app, le verre de macOS derrière le panneau ; en auto-test, un fond plein pour la capture. */
-  if (!window.JAUGE_ESSAI) document.documentElement.classList.add('vibrance');
+  /* In the app, the macOS glass behind the panel; in the self-test, a solid background for the capture. */
+  /* On Linux the window is opaque (no glass to show through), so it keeps the solid background too. */
+  if (!window.JAUGE_ESSAI && !window.JAUGE_OPAQUE) document.documentElement.classList.add('vibrance');
   window.jauge = {
     charger: () => invoke('etat'),
     surEtat: rappel => listen('etat', e => rappel(e.payload)),

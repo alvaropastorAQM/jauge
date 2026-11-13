@@ -1,4 +1,4 @@
-//! Ce que Tauri ne fait pas lui-même sur macOS : place et police de l'icône, inactivité, ouverture au démarrage.
+//! What Tauri does not do by itself on macOS: icon position and font, idle time, opening at login.
 
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, MainThreadMarker};
@@ -6,13 +6,13 @@ use objc2_app_kit::{NSFont, NSFontWeightRegular, NSStatusItem, NSWindow, NSWindo
 use objc2_foundation::{NSString, NSUserDefaults};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
-/// Nom fixe de l'icône, le même que la version Electron : macOS retient sa place sous ce nom d'un lancement à l'autre.
+/// Fixed name of the icon, the same as the Electron version: macOS remembers its position under this name from one launch to the next.
 const NOM_BARRE: &str = "b3f1e7a2-5c4d-4e8f-9a6b-2d7c1e0f8a35";
-/// Distance au bord droit de l'écran, en points : à côté de la batterie (285), du côté visible de l'encoche.
-/// Posée une seule fois : si tu déplaces l'icône avec ⌘, macOS réécrit cette valeur et ta place est gardée.
+/// Distance from the right edge of the screen, in points: next to the battery (285), on the visible side of the notch.
+/// Set only once: if you move the icon with ⌘, macOS rewrites this value and your position is kept.
 const PLACE_BARRE: f64 = 300.0;
 
-/// À appeler sur le fil principal, juste après la création de l'icône.
+/// To be called on the main thread, right after the icon is created.
 pub fn regler_icone(item: &NSStatusItem) {
     let Some(mtm) = MainThreadMarker::new() else { return };
     let nom = NSString::from_str(NOM_BARRE);
@@ -22,17 +22,17 @@ pub fn regler_icone(item: &NSStatusItem) {
         reglages.setDouble_forKey(PLACE_BARRE, &cle);
     }
     item.setAutosaveName(Some(&nom));
-    // Chiffres à chasse fixe, comme les icônes système : le pourcentage ne fait pas bouger les icônes voisines.
+    // Fixed-width digits, like the system icons: the percentage does not shift the neighbouring icons.
     if let Some(bouton) = item.button(mtm) {
         let police = unsafe { NSFont::monospacedDigitSystemFontOfSize_weight(NSFont::systemFontSize(), NSFontWeightRegular) };
         bouton.setFont(Some(&police));
     }
 }
 
-/// Ce que Tauri ne règle pas pour le panneau, à appeler sur le fil principal :
-/// - il s'affiche aussi par-dessus une app en plein écran, comme la version Electron (Tauri ne règle que « tous les bureaux ») ;
-/// - ses coins sont arrondis à 12 points en coupant toute la fenêtre (verre et page) : l'arrondi du verre de Tauri ne prend plus
-///   sur les macOS récents.
+/// What Tauri does not set for the panel, to be called on the main thread:
+/// - it also shows over a full-screen app, like the Electron version (Tauri only sets "all desktops");
+/// - its corners are rounded to 12 points by clipping the whole window (glass and page): Tauri's glass rounding no longer
+///   applies on recent macOS.
 pub fn regler_panneau(ns_window: *mut std::ffi::c_void) {
     let Some(fenetre) = (unsafe { (ns_window as *const NSWindow).as_ref() }) else { return };
     fenetre.setCollectionBehavior(
@@ -47,7 +47,7 @@ pub fn regler_panneau(ns_window: *mut std::ffi::c_void) {
                 let () = msg_send![couche, setMasksToBounds: true];
             }
         }
-        // L'ombre suit la nouvelle forme.
+        // The shadow follows the new shape.
         fenetre.invalidateShadow();
     }
 }
@@ -57,13 +57,13 @@ extern "C" {
     fn CGEventSourceSecondsSinceLastEventType(source: i32, event: u32) -> f64;
 }
 
-/// Secondes depuis la dernière action au clavier, à la souris ou au trackpad (Mac verrouillé compris).
+/// Seconds since the last keyboard, mouse or trackpad action (including while the Mac is locked).
 pub fn inactif_depuis() -> f64 {
     // kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType
     unsafe { CGEventSourceSecondsSinceLastEventType(0, u32::MAX) }
 }
 
-/// Ouverture au démarrage du Mac, par le même service que la version Electron (Réglages > Général > Ouverture).
+/// Opening at login, through the same service as the Electron version (Settings > General > Login Items).
 pub fn ouvre_au_demarrage() -> bool {
     unsafe { SMAppService::mainAppService().status() == SMAppServiceStatus::Enabled }
 }

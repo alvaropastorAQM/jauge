@@ -1,4 +1,4 @@
-//! Les limites du forfait, lues dans la réponse de Claude, et leur suivi d'un relevé à l'autre.
+//! The plan limits, read from Claude's response, and how they are tracked from one reading to the next.
 
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use crate::rythme::MINUTE;
 
-/// Même forme que celle que lit le panneau (ui/js/vue.js).
+/// Same shape as the one the panel reads (ui/js/vue.js).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Limite {
     pub groupe: String,
@@ -15,11 +15,11 @@ pub struct Limite {
     pub sorte: Option<String>,
     pub pourcent: Option<f64>,
     pub gravite: Option<String>,
-    /// Remise à zéro, en millisecondes depuis 1970.
+    /// Reset time, in milliseconds since 1970.
     pub reinit: Option<i64>,
     pub modele: Option<String>,
     pub surface: Option<String>,
-    /// Dernier relevé qui l'a renvoyée.
+    /// Last reading that returned it.
     pub vu: Option<i64>,
 }
 
@@ -45,8 +45,8 @@ fn vers_limite(l: &Value) -> Limite {
     }
 }
 
-/// La liste `limits` quand Claude l'envoie, sinon l'ancienne forme (five_hour, seven_day, model_scoped), traduite dans les mêmes
-/// sortes : une limite garde ainsi la même clé quelle que soit la forme de la réponse.
+/// The `limits` list when Claude sends it, otherwise the old shape (five_hour, seven_day, model_scoped), translated into the same
+/// kinds: a limit thus keeps the same key whatever the shape of the response.
 pub fn lire_limites(rl: &Value) -> Vec<Limite> {
     let limites: Vec<Limite> = rl["limits"].as_array().map(|a| a.iter().map(vers_limite).collect()).unwrap_or_default();
     if !limites.is_empty() {
@@ -75,8 +75,8 @@ fn cle(l: &Limite) -> (Option<String>, Option<String>, Option<String>) {
 
 pub const GRACE: i64 = 10 * MINUTE;
 
-/// Une réponse incomplète (juste après une reconnexion, par exemple) peut omettre une limite, comme Fable : sa dernière valeur
-/// reste affichée 10 min au plus, et jamais au-delà de sa remise à zéro.
+/// An incomplete response (right after signing in again, for example) can omit a limit, such as Fable: its last value
+/// stays displayed for 10 min at most, and never past its reset.
 pub fn fusionner(nouvelles: Vec<Limite>, anciennes: &[Limite], t: i64) -> Vec<Limite> {
     let presentes: HashSet<_> = nouvelles.iter().map(cle).collect();
     let mut sortie: Vec<Limite> = nouvelles.into_iter().map(|l| Limite { vu: Some(t), ..l }).collect();
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn deux_formes_memes_cles() {
         let (n, a) = (lire_limites(&neuve()), lire_limites(&ancienne()));
-        assert_eq!(n.iter().map(libelle).collect::<Vec<_>>(), ["Session", "Semaine", "Fable"]);
+        assert_eq!(n.iter().map(libelle).collect::<Vec<_>>(), ["Session", "Weekly", "Fable"]);
         assert_eq!(n.iter().map(cle).collect::<Vec<_>>(), a.iter().map(cle).collect::<Vec<_>>());
         assert_eq!(n[1].reinit, Some(1_794_290_400_413));
     }
@@ -123,15 +123,15 @@ mod tests {
     fn fusion_sans_doublon_et_grace() {
         let t = date_ms(&json!("2026-11-09T17:30:00Z")).unwrap();
         let (n, a) = (lire_limites(&neuve()), lire_limites(&ancienne()));
-        // Le cas de la capture : un relevé à l'ancienne forme, puis un à la nouvelle. Trois cartes, pas quatre.
+        // The case from the capture: a reading in the old shape, then one in the new. Three cards, not four.
         let mut suivies = fusionner(a, &[], t);
         suivies = fusionner(n.clone(), &suivies, t + MINUTE);
         assert_eq!(suivies.iter().map(|l| l.pourcent.unwrap()).collect::<Vec<_>>(), [36.0, 74.0, 15.0]);
-        // Fable absent d'une réponse : gardé 10 min au plus, puis oublié.
+        // Fable missing from a response: kept for 10 min at most, then dropped.
         suivies = fusionner(n[..2].to_vec(), &suivies, t + 2 * MINUTE);
         assert_eq!(suivies.len(), 3);
         assert_eq!(fusionner(n[..2].to_vec(), &suivies, t + MINUTE + GRACE).len(), 2);
-        // Ni au-delà de sa remise à zéro.
+        // Nor past its reset.
         assert!(fusionner(vec![], &suivies, date_ms(&json!(QUAND)).unwrap() + 1).is_empty());
         assert!(JOUR > 0);
     }

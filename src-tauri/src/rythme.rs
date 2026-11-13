@@ -1,12 +1,12 @@
-//! Rythme des limites, pour la barre des menus. Mêmes règles que ui/js/rythme.js, qui sert au panneau : les deux sont testés
-//! sur les mêmes cas.
+//! Pace of the limits, for the menu bar. Same rules as ui/js/rythme.js, which serves the panel: both are tested
+//! on the same cases.
 
 use crate::limites::Limite;
 
 pub const MINUTE: i64 = 60_000;
 pub const HEURE: i64 = 60 * MINUTE;
 pub const JOUR: i64 = 24 * HEURE;
-/// Mêmes seuils que Fil : sous 5 points d'écart on est dans le rythme, à 15 points vraiment en avance.
+/// Same thresholds as Fil: within 5 points we are on pace, at 15 points we are really ahead.
 const TOLERANCE: f64 = 0.05;
 const TRES_EN_AVANCE: f64 = 0.15;
 
@@ -14,7 +14,7 @@ pub fn duree(l: &Limite) -> i64 {
     if l.groupe == "session" { 5 * HEURE } else { 7 * JOUR }
 }
 
-/// Écart entre l'utilisation et la part de la fenêtre écoulée (positif : on consomme plus vite que le temps ne passe).
+/// Gap between usage and the share of the window that has elapsed (positive: usage is going faster than time).
 fn ecart(l: &Limite, t: i64) -> Option<f64> {
     let ecoule = (1.0 - (l.reinit? - t) as f64 / duree(l) as f64).clamp(0.0, 1.0);
     Some(l.pourcent? / 100.0 - ecoule)
@@ -28,7 +28,7 @@ pub enum Ton {
     Mauvais,
 }
 
-/// Comme Fil : vert quand il reste de la marge sur le temps, neutre au rythme, jaune en avance, rouge vraiment en avance.
+/// Like Fil: green when there is room to spare on the clock, neutral on pace, yellow when ahead, red when really ahead.
 pub fn ton(l: &Limite, t: i64) -> Ton {
     match ecart(l, t) {
         Some(e) if e >= TRES_EN_AVANCE => Ton::Mauvais,
@@ -38,8 +38,8 @@ pub fn ton(l: &Limite, t: i64) -> Ton {
     }
 }
 
-/// Passée sa remise à zéro, une limite repart de 0 sans attendre le prochain relevé : la semaine pour une nouvelle fenêtre
-/// de 7 jours, la session au prochain message (pas d'heure tant qu'il n'est pas envoyé).
+/// Once its reset has passed, a limit starts again from 0 without waiting for the next reading: the week for a new 7-day
+/// window, the session at the next message (no time until it is sent).
 pub fn a_jour(limites: &[Limite], t: i64) -> Vec<Limite> {
     limites
         .iter()
@@ -69,11 +69,11 @@ pub fn libelle(l: &Limite) -> String {
         return nom.clone();
     }
     match l.sorte.as_deref() {
-        // Une sorte de limite que Jauge ne connaît pas encore garde un nom à elle, pour ne pas faire deux cartes « Semaine ».
+        // A kind of limit that Jauge does not know yet gets a name of its own, so there are never two "Weekly" cards.
         Some(s) if s != "weekly" && s != "weekly_all" => {
-            format!("Semaine · {}", s.trim_start_matches("weekly").trim_start_matches('_').replace('_', " "))
+            format!("Weekly · {}", s.trim_start_matches("weekly").trim_start_matches('_').replace('_', " "))
         }
-        _ => "Semaine".into(),
+        _ => "Weekly".into(),
     }
 }
 
@@ -114,7 +114,7 @@ mod tests {
         assert_eq!(plus_proche(&l).unwrap().groupe, "session");
         assert!(plus_proche(&[]).is_none());
         let inconnue = Limite { sorte: Some("weekly_oauth_apps".into()), ..limite("weekly", 1.0, None) };
-        assert_eq!(libelle(&inconnue), "Semaine · oauth apps");
+        assert_eq!(libelle(&inconnue), "Weekly · oauth apps");
         assert_eq!(libelle(&Limite { modele: Some("Fable".into()), ..limite("weekly", 1.0, None) }), "Fable");
     }
 }

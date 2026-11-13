@@ -1,5 +1,5 @@
-//! Équivalent API : ce qu'aurait coûté au tarif de l'API la consommation inscrite dans les journaux de Claude Code
-//! (~/.claude/projects). Lecture incrémentale : chaque passage ne relit que ce qui s'est ajouté aux fichiers.
+//! API equivalent: what the usage recorded in the Claude Code logs (~/.claude/projects) would have cost at API prices.
+//! Incremental reading: each pass only reads what was appended to the files.
 
 use chrono::{Local, TimeZone};
 use serde::{Deserialize, Serialize};
@@ -9,8 +9,8 @@ use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-/// shortcut: tarifs publics de l'API en dollars par million de jetons (entrée, sortie, lecture du cache), relevés au 06/10/2026 ;
-/// à mettre à jour quand Anthropic change ses prix. Le plus précis d'abord. Écrire le cache coûte 1,25 × l'entrée (5 min) ou 2 × (1 h).
+/// shortcut: public API prices in dollars per million tokens (input, output, cache read), as of 06/10/2026;
+/// to be updated when Anthropic changes its prices. Most specific first. Writing the cache costs 1.25 × the input (5 min) or 2 × (1 h).
 const TARIFS: [(&str, f64, f64, f64); 9] = [
     ("fable-5-1|mythos-5-1", 10.0, 50.0, 0.25),
     ("fable|mythos", 10.0, 50.0, 1.0),
@@ -23,19 +23,19 @@ const TARIFS: [(&str, f64, f64, f64); 9] = [
     ("haiku", 1.0, 5.0, 0.1),
 ];
 
-/// Les coûts sauvés d'un lancement à l'autre ne valent que pour ces tarifs et cette lecture : changer l'un ou l'autre relit tout.
-/// Même chaîne que l'ancienne version (Electron), pour reprendre sa sauvegarde. Monter le premier chiffre si la lecture change.
+/// Costs saved from one launch to the next are only valid for these prices and this way of reading: changing either rereads everything.
+/// Same string as the old (Electron) version, to pick up its saved state. Bump the first number if the reading changes.
 pub fn version() -> String {
     let t: Vec<String> = TARIFS.iter().map(|(m, e, s, l)| format!("[\"{m}\",{e},{s},{l}]")).collect();
     format!("1:[{}]", t.join(","))
 }
 
-/// Un modèle inconnu ne compte pas : mieux vaut un total incomplet qu'un montant inventé.
+/// An unknown model does not count: better an incomplete total than an invented amount.
 pub fn tarif(modele: &str) -> Option<(f64, f64, f64)> {
     TARIFS.iter().find(|(motif, ..)| motif.split('|').any(|m| modele.contains(m))).map(|&(_, e, s, l)| (e, s, l))
 }
 
-/// Coût en dollars d'une réponse, d'après le bloc `usage` du journal. Le mode rapide coûte le double.
+/// Cost in dollars of a response, from the `usage` block of the log. Fast mode costs double.
 pub fn cout_de(modele: &str, u: &Value) -> f64 {
     let Some((entree, sortie, lecture)) = tarif(modele) else { return 0.0 };
     let n = |cle: &str| u[cle].as_f64().unwrap_or(0.0);
@@ -47,7 +47,7 @@ pub fn cout_de(modele: &str, u: &Value) -> f64 {
     if u["speed"] == "fast" { dollars * 2.0 } else { dollars }
 }
 
-/// Seuls ces champs sont lus : le reste d'une ligne (souvent très long) est sauté sans être construit.
+/// Only these fields are read: the rest of a line (often very long) is skipped without being built.
 #[derive(Deserialize)]
 struct Ligne {
     #[serde(rename = "type")]
@@ -69,7 +69,7 @@ pub struct Entree {
     pub cout: f64,
 }
 
-/// Une ligne porte une consommation si c'est une vraie réponse d'un modèle.
+/// A line carries usage if it is a real model response.
 pub fn lire_ligne(ligne: &str) -> Option<Entree> {
     if !ligne.contains("\"usage\"") {
         return None;
@@ -93,7 +93,7 @@ pub struct Bilan {
     pub messages: usize,
 }
 
-/// Le format de la sauvegarde, inchangé depuis la version Electron.
+/// The format of the saved state, unchanged since the Electron version.
 #[derive(Serialize, Deserialize)]
 struct Reprise {
     version: String,
@@ -104,7 +104,7 @@ struct Reprise {
 pub struct Releveur {
     racine: PathBuf,
     pub decalages: HashMap<String, u64>,
-    /// Le même message est écrit plusieurs fois, parfois dans plusieurs fichiers (reprise de session) : seule sa dernière version compte.
+    /// The same message is written several times, sometimes in several files (session resume): only its last version counts.
     pub messages: HashMap<String, (Option<i64>, f64)>,
     pub change: bool,
 }
@@ -126,7 +126,7 @@ impl Releveur {
         Releveur { racine, decalages: HashMap::new(), messages: HashMap::new(), change: false }
     }
 
-    /// `seulement` : les journaux qui ont bougé (chemins absolus) ; sans, tout le dossier est passé en revue.
+    /// `seulement`: the logs that changed (absolute paths); without it, the whole folder is scanned.
     pub fn relever(&mut self, maintenant: i64, seulement: Option<&[PathBuf]>) -> Bilan {
         let mut tous = Vec::new();
         let chemins = match seulement {
@@ -144,14 +144,14 @@ impl Releveur {
             let Ok(info) = fs::metadata(chemin) else { continue };
             let cle = chemin.to_string_lossy().into_owned();
             let taille = info.len();
-            // Fichier réécrit plus court : on le relit depuis le début.
+            // File rewritten shorter: read it again from the start.
             let deja = self.decalages.get(&cle).copied().filter(|&d| d <= taille).unwrap_or(0);
             if taille > deja {
                 let _ = self.lire_fichier(chemin, &cle, deja, taille);
             }
             vus.insert(cle);
         }
-        // Un journal effacé par Claude Code garde ses réponses dans le total ; seule sa position de lecture est oubliée.
+        // A log deleted by Claude Code keeps its responses in the total; only its read position is forgotten.
         if seulement.is_none() {
             let avant = self.decalages.len();
             self.decalages.retain(|c, _| vus.contains(c));
@@ -174,7 +174,7 @@ impl Releveur {
             }
             pos += n as u64;
             reste.extend_from_slice(&tampon[..n]);
-            // Une ligne pas encore terminée attend le prochain passage.
+            // A line not yet finished waits for the next pass.
             let Some(fin) = reste.iter().rposition(|&b| b == b'\n') else { continue };
             for ligne in reste[..fin].split(|&b| b == b'\n') {
                 if let Some(e) = std::str::from_utf8(ligne).ok().and_then(lire_ligne) {
@@ -208,8 +208,8 @@ impl Releveur {
         Bilan { total_usd: total, aujourdhui_usd: aujourdhui, depuis, messages: self.messages.len() }
     }
 
-    /// Reprend là où le dernier lancement s'était arrêté : sans ça, chaque démarrage du Mac relirait tous les journaux (plusieurs Go).
-    /// Les positions et les réponses arrivent ensemble ou pas du tout : les unes sans les autres feraient sauter des réponses pour toujours.
+    /// Picks up where the last launch stopped: without it, every start of the computer would reread all the logs (several GB).
+    /// Positions and responses come together or not at all: one without the other would skip responses forever.
     pub fn charger(&mut self, fichier: &Path) {
         let Some(r) = fs::read(fichier).ok().and_then(|o| serde_json::from_slice::<Reprise>(&o).ok()) else { return };
         if r.version == version() {
@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(tarif("claude-sonnet-4-6"), Some((3.0, 15.0, 0.3)));
         assert_eq!(tarif("gpt-5"), None);
         proche(cout_de("gpt-5", &json!({ "input_tokens": 1e6 })), 0.0);
-        // Un million de jetons de chaque sorte, sur Opus 5.5 : 4 + 20 + 0,2 de lecture + 4 × 1,25 (5 min) + 4 × 2 (1 h).
+        // One million tokens of each kind, on Opus 5.5: 4 + 20 + 0.2 for reads + 4 × 1.25 (5 min) + 4 × 2 (1 h).
         let u = json!({ "input_tokens": 1e6, "output_tokens": 1e6, "cache_read_input_tokens": 1e6, "cache_creation_input_tokens": 2e6,
                         "cache_creation": { "ephemeral_1h_input_tokens": 1e6 } });
         proche(cout_de("claude-opus-5-5", &u), 4.0 + 20.0 + 0.2 + 5.0 + 8.0);
@@ -276,7 +276,7 @@ mod tests {
         proche(cout_de("claude-sonnet-5-5", &json!({ "cache_creation_input_tokens": 1e6 })), 2.5);
         assert!(lire_ligne(r#"{"type":"user","message":{"content":"usage"}}"#).is_none());
         assert!(lire_ligne(&ligne("m", 10.0, MATIN, "<synthetic>")).is_none());
-        assert!(lire_ligne(r#"{"usage": tronqué"#).is_none());
+        assert!(lire_ligne(r#"{"usage": truncated"#).is_none());
         proche(lire_ligne(&ligne("m", 1e6, MATIN, "claude-opus-5-5")).unwrap().cout, 20.0);
     }
 
@@ -289,7 +289,7 @@ mod tests {
         let maintenant = chrono::DateTime::parse_from_rfc3339("2026-11-08T12:00:00Z").unwrap().timestamp_millis();
         let opus = "claude-opus-5-5";
 
-        // Le même message écrit deux fois : seule la dernière version compte. Une ligne pas finie attend le passage suivant.
+        // The same message written twice: only the last version counts. An unfinished line waits for the next pass.
         let complet = format!("{}\n{}\n{}", ligne("m1", 1e5, MATIN, opus), ligne("m1", 1e6, MATIN, opus), ligne("m2", 1e6, OCTOBRE, opus));
         fs::write(&fichier, &complet[..complet.len() - 20]).unwrap();
         let mut r = Releveur::new(racine.clone());
@@ -304,11 +304,11 @@ mod tests {
         proche(b.aujourdhui_usd, 20.0);
         assert_eq!(b.depuis, chrono::DateTime::parse_from_rfc3339(OCTOBRE).ok().map(|d| d.timestamp_millis()));
 
-        // Une reprise de session recopie un message dans un autre fichier : il n'est compté qu'une fois.
+        // A session resume copies a message into another file: it is counted only once.
         fs::write(dossier.join("b.jsonl"), ligne("m2", 1e6, OCTOBRE, opus) + "\n").unwrap();
         assert_eq!(r.relever(maintenant, None).messages, 2);
 
-        // Reprise d'un lancement à l'autre : on repart des positions sauvées, sans rien compter deux fois ni rien perdre.
+        // Resuming from one launch to the next: start again from the saved positions, counting nothing twice and losing nothing.
         let reprise = racine.join("reprise.json");
         r.sauver(&reprise).unwrap();
         assert!(!r.change);
@@ -324,23 +324,23 @@ mod tests {
         assert_eq!(b.messages, 3);
         proche(b.total_usd, 60.0);
 
-        // Relecture ciblée (journaux signalés par la veille) : seul ce fichier est lu, les autres positions restent.
+        // Targeted reread (logs flagged by the watcher): only this file is read, the other positions stay.
         ajouter("m4");
         assert_eq!(r2.relever(maintenant, Some(&[fichier.clone()])).messages, 4);
         assert_eq!(r2.decalages.len(), 2);
 
-        // Un journal effacé garde ses réponses dans le total.
+        // A deleted log keeps its responses in the total.
         fs::remove_file(dossier.join("b.jsonl")).unwrap();
         fs::remove_file(&fichier).unwrap();
         assert_eq!(r2.relever(maintenant, None).messages, 4);
         assert!(r2.decalages.is_empty());
 
-        // Une reprise abîmée ou d'une autre version : premier passage complet, sans planter.
+        // A damaged saved state, or one from another version: full first pass, without crashing.
         let mut r3 = Releveur::new(racine.clone());
-        fs::write(&reprise, r#"{"version":"0:ancien","decalages":[],"messages":[["x",null,1]]}"#).unwrap();
+        fs::write(&reprise, r#"{"version":"0:old","decalages":[],"messages":[["x",null,1]]}"#).unwrap();
         r3.charger(&reprise);
         assert!(r3.messages.is_empty());
-        fs::write(&reprise, "{tronqué").unwrap();
+        fs::write(&reprise, "{truncated").unwrap();
         r3.charger(&reprise);
         assert!(r3.messages.is_empty());
         fs::remove_dir_all(&racine).unwrap();

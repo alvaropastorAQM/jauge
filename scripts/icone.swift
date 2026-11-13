@@ -1,4 +1,4 @@
-// Dessine l'icône de Jauge (1024 px) : l'anneau de la barre des menus sur un carré graphite. swift scripts/icone.swift <sortie.png>
+// Draws the Jauge icon (1024 px): the menu bar ring on a graphite square. swift scripts/icone.swift <output.png>
 import AppKit
 
 let taille: CGFloat = 1024
@@ -6,7 +6,7 @@ let image = NSImage(size: NSSize(width: taille, height: taille))
 image.lockFocus()
 let ctx = NSGraphicsContext.current!.cgContext
 
-// Gabarit des icônes macOS : un carré arrondi de 824 px centré.
+// macOS icon template: a centred 824 px rounded square.
 let carre = CGRect(x: 100, y: 100, width: 824, height: 824)
 let forme = CGPath(roundedRect: carre, cornerWidth: 186, cornerHeight: 186, transform: nil)
 ctx.addPath(forme)

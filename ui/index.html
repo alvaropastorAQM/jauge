@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>Jauge</title>
+<link rel="stylesheet" href="css/fonts.css">
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -13,27 +14,27 @@
       <h1>Jauge</h1>
       <span class="badge" id="forfait" hidden></span>
     </div>
-    <div class="direct" id="direct"><span class="voyant"></span><span id="direct-texte">connexion…</span></div>
+    <div class="direct" id="direct"><span class="voyant"></span><span id="direct-texte">connecting…</span></div>
   </header>
 
-  <section class="resume" aria-label="Résumé">
+  <section class="resume" aria-label="Summary">
     <div class="kpi">
-      <div class="kpi-libelle">Équivalent API</div>
+      <div class="kpi-libelle">API equivalent</div>
       <div class="kpi-valeur" id="cout">…</div>
-      <div class="kpi-contexte" id="cout-contexte">Lecture de tes journaux…</div>
+      <div class="kpi-contexte" id="cout-contexte">Reading your logs…</div>
     </div>
     <div class="kpi">
-      <div class="kpi-libelle">Limite la plus proche</div>
+      <div class="kpi-libelle">Closest limit</div>
       <div class="kpi-valeur" id="proche">…</div>
       <div class="kpi-contexte" id="proche-contexte"></div>
     </div>
   </section>
 
-  <section class="limites" id="limites" aria-label="Limites" aria-live="polite"></section>
+  <section class="limites" id="limites" aria-label="Limits" aria-live="polite"></section>
 
   <footer class="pied" id="pied">
     <span id="pied-texte"></span>
-    <button type="button" class="btn-carre" id="actualiser" aria-label="Actualiser maintenant" title="Actualiser maintenant">
+    <button type="button" class="btn-carre" id="actualiser" aria-label="Refresh now" title="Refresh now">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>
     </button>
   </footer>

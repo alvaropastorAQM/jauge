@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Le panneau lit l'état de Jauge et reçoit ses mises à jour.",
+  "description": "The panel reads Jauge's state and receives its updates.",
   "windows": ["panneau"],
   "permissions": ["core:default"]
 }
