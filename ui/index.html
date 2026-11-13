@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Jauge</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main class="panneau" id="panneau">
+  <header class="tete">
+    <div class="marque">
+      <svg class="logo" viewBox="0 0 20 20" aria-hidden="true"><circle class="logo-piste" cx="10" cy="10" r="7"/><circle class="logo-arc" id="logo-arc" cx="10" cy="10" r="7" pathLength="100"/></svg>
+      <h1>Jauge</h1>
+      <span class="badge" id="forfait" hidden></span>
+    </div>
+    <div class="direct" id="direct"><span class="voyant"></span><span id="direct-texte">connexion…</span></div>
+  </header>
+
+  <section class="resume" aria-label="Résumé">
+    <div class="kpi">
+      <div class="kpi-libelle">Équivalent API</div>
+      <div class="kpi-valeur" id="cout">…</div>
+      <div class="kpi-contexte" id="cout-contexte">Lecture de tes journaux…</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-libelle">Limite la plus proche</div>
+      <div class="kpi-valeur" id="proche">…</div>
+      <div class="kpi-contexte" id="proche-contexte"></div>
+    </div>
+  </section>
+
+  <section class="limites" id="limites" aria-label="Limites" aria-live="polite"></section>
+
+  <footer class="pied" id="pied">
+    <span id="pied-texte"></span>
+    <button type="button" class="btn-carre" id="actualiser" aria-label="Actualiser maintenant" title="Actualiser maintenant">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></svg>
+    </button>
+  </footer>
+</main>
+<script src="js/pont.js"></script>
+<script src="js/rythme.js"></script>
+<script src="js/vue.js"></script>
+</body>
+</html>

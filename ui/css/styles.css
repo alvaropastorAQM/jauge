@@ -1,0 +1,183 @@
+/* Design « Graphite » (design_system_macos27.md de Tracker, Fil et Sablier), variante graphite pur comme Fil et Tracker.
+   Panneau de niveau 4 (verre de macOS). Les couleurs des limites sont celles de Fil : chiffres neutres, seul le voile de la barre
+   dit la marge (vert) ou l'avance sur le temps (jaune, rouge).
+   Le sombre et le clair suivent le Mac. */
+
+:root {
+  color-scheme: dark;
+  --accent-soft: rgba(255,255,255,0.10);
+  --accent-rim: rgba(255,255,255,0.42);
+
+  --surface-floating: rgba(32,32,37,0.92);
+  --fond-verre: rgba(28,28,32,0.88);
+  --surface-card: linear-gradient(180deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.03) 100%);
+  --fill-2: rgba(255,255,255,0.08);
+  --border-subtle: rgba(255,255,255,0.07);
+  --rim: rgba(255,255,255,0.10);
+  --specular-top: inset 0 1px 0 0 var(--rim);
+
+  --text-primary: rgba(255,255,255,0.94);
+  --text-secondary: rgba(255,255,255,0.64);
+  --text-tertiary: #8E8E93;
+
+  --positive: #4CB782;
+  --warning: #E0A443;
+  --negative: #E5675C;
+
+  --chart-track: rgba(255,255,255,0.09);
+  --serie: rgba(255,255,255,0.88);
+  --repere-contour: rgba(36,36,40,0.95);
+
+  --spring-apple: cubic-bezier(0.22, 1, 0.36, 1);
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --accent-soft: rgba(0,0,0,0.06);
+    --accent-rim: rgba(0,0,0,0.32);
+
+    --surface-floating: rgba(246,246,248,0.94);
+    --fond-verre: rgba(246,246,248,0.90);
+    --surface-card: rgba(255,255,255,0.72);
+    --fill-2: rgba(0,0,0,0.06);
+    --border-subtle: rgba(0,0,0,0.07);
+    --rim: rgba(255,255,255,0.9);
+
+    --text-primary: rgba(0,0,0,0.88);
+    --text-secondary: rgba(0,0,0,0.60);
+    --text-tertiary: #68686D;
+
+    --positive: #1F7A35;
+    --warning: #9A5B00;
+    --negative: #C9301F;
+
+    --chart-track: rgba(0,0,0,0.07);
+    --serie: rgba(0,0,0,0.80);
+    --repere-contour: rgba(255,255,255,0.95);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; }
+html { background: var(--surface-floating); }
+/* Dans l'app, le flou vient de la fenêtre (vibrancy) ; un voile presque opaque par-dessus garde le texte lisible sur n'importe quel fond d'écran. */
+/* La fenêtre est transparente : le voile suit les coins arrondis du verre (12 px). */
+html.vibrance { background: transparent; }
+html.vibrance body { min-height: 100vh; border-radius: 12px; background: var(--fond-verre); }
+body {
+  font: 13px/1.45 var(--font-ui); color: var(--text-primary);
+  -webkit-font-smoothing: antialiased; user-select: none; cursor: default; overflow: hidden;
+}
+
+.panneau { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px 8px; }
+
+/* ---------- En-tête ---------- */
+
+.tete { display: flex; align-items: center; justify-content: space-between; height: 22px; padding: 0 2px; }
+.marque { display: flex; align-items: center; gap: 7px; }
+.marque h1 { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+.logo { width: 16px; height: 16px; }
+.logo circle { fill: none; stroke-width: 2.6; }
+.logo-piste { stroke: var(--chart-track); }
+.logo-arc { stroke: var(--text-primary); stroke-dasharray: 0 100; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dasharray 700ms var(--spring-apple); }
+.badge { height: 18px; padding: 0 6px; border-radius: 5px; background: var(--fill-2); font: 500 11px/18px var(--font-ui); color: var(--text-secondary); }
+.badge[hidden] { display: none; }
+
+.direct { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.direct.frais { color: var(--text-secondary); }
+.voyant { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); }
+.direct.frais .voyant { background: var(--positive); }
+/* Pulsation seulement pendant un relevé. */
+.direct.actif .voyant { animation: pulsation 1.2s ease-in-out infinite; }
+@keyframes pulsation { 50% { opacity: 0.3; } }
+
+/* ---------- Résumé ---------- */
+
+.resume { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 2px; }
+.kpi-libelle { font-size: 12px; color: var(--text-secondary); }
+.kpi-valeur {
+  margin: 1px 0 3px; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.kpi-contexte { font-size: 11.5px; line-height: 1.4; color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: pre-line; }
+.unite { font-size: 0.6em; font-weight: 500; letter-spacing: 0; color: var(--text-secondary); }
+
+/* ---------- Limites ---------- */
+
+.limites { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.carte {
+  min-width: 0; padding: 10px 11px 9px; border-radius: 10px; background: var(--surface-card);
+  box-shadow: 0 0 0 1px var(--border-subtle), var(--specular-top);
+}
+.carte.grande { grid-column: 1 / -1; padding: 11px 12px 10px; }
+/* Une petite carte seule sur sa ligne prend toute la largeur : pas de trou à droite. */
+.carte.petite:nth-child(odd of .carte.petite):last-child { grid-column: 1 / -1; }
+.carte-haut { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.carte-nom { overflow: hidden; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; text-overflow: ellipsis; }
+.carte.grande .carte-nom { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.carte-pct { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.carte.grande .carte-pct { font-size: 20px; letter-spacing: -0.02em; }
+
+.piste { position: relative; height: 6px; margin: 9px 0 8px; border-radius: 3px; background: var(--chart-track); }
+.carte.grande .piste { height: 8px; margin: 11px 0 9px; border-radius: 4px; }
+/* Comme dans Fil : l'utilisation en blanc, puis un voile jusqu'au trait du temps écoulé (ou au-delà). */
+.rempli, .voile { position: absolute; top: 0; bottom: 0; transition: width 620ms var(--spring-apple), left 620ms var(--spring-apple), background 400ms ease; }
+.rempli { left: 0; border-radius: 3px 0 0 3px; background: var(--serie); }
+.voile { background: color-mix(in srgb, var(--serie) 55%, transparent); }
+.voile.marge { background: linear-gradient(90deg, color-mix(in srgb, var(--positive) 42%, transparent), color-mix(in srgb, var(--positive) 20%, transparent)); }
+.voile.attention { background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 62%, transparent), color-mix(in srgb, var(--warning) 36%, transparent)); }
+.voile.mauvais { background: linear-gradient(90deg, color-mix(in srgb, var(--negative) 66%, transparent), color-mix(in srgb, var(--negative) 40%, transparent)); }
+/* Le repère du temps écoulé : là où l'utilisation devrait être si elle suivait le temps. */
+.repere {
+  position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px;
+  background: var(--text-primary); box-shadow: 0 0 0 1.5px var(--repere-contour);
+  transition: left 700ms var(--spring-apple);
+}
+.repere[hidden] { display: none; }
+
+.carte-bas {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px;
+  font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+.carte.petite .carte-bas { flex-direction: column; }
+.reinit { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.reinit svg { flex: none; width: 11px; height: 11px; }
+.rythme { color: var(--text-secondary); white-space: nowrap; }
+
+.etat-vide { grid-column: 1 / -1; padding: 12px 2px; font-size: 12px; color: var(--text-secondary); }
+.etat-vide.erreur { color: var(--warning); }
+.connexion { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 6px; }
+.connexion .etat-vide { padding-bottom: 6px; }
+/* Bouton primaire du design Graphite (accent graphite pur : blanc en sombre, noir en clair). */
+.btn-primaire {
+  height: 30px; padding: 0 14px; border: 0; border-radius: 8px; font: 500 13px var(--font-ui);
+  background: var(--text-primary); color: var(--surface-floating); opacity: 1;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 1px 2px rgba(0,0,0,0.3);
+}
+.btn-primaire:active { transform: scale(0.97); transition-duration: 80ms; }
+.btn-primaire:disabled { opacity: 0.5; }
+.btn-primaire:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent-rim), 0 0 0 3px var(--accent-soft); }
+
+/* ---------- Pied ---------- */
+
+.pied {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 0 0 2px; border-top: 1px solid var(--border-subtle);
+  font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+.pied.erreur #pied-texte { color: var(--warning); }
+.btn-carre {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  background: transparent; color: var(--text-secondary);
+}
+.btn-carre:hover { background: var(--fill-2); color: var(--text-primary); }
+.btn-carre:active { transform: scale(0.94); transition-duration: 80ms; }
+.btn-carre:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent-rim), 0 0 0 3px var(--accent-soft); }
+.btn-carre svg { width: 14px; height: 14px; }
+.pied.actif .btn-carre svg { animation: tourner 0.9s linear infinite; }
+@keyframes tourner { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 1ms !important; }
+}

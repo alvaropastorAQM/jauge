@@ -1,0 +1,25 @@
+[package]
+name = "jauge"
+version = "0.2.0"
+description = "Tes limites Claude en direct, dans la barre des menus"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "macos-private-api", "custom-protocol"] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSUserDefaults", "NSError"] }
+objc2-app-kit = { version = "0.3", features = ["NSStatusItem", "NSStatusBarButton", "NSButton", "NSControl", "NSView", "NSResponder", "NSFont", "NSFontDescriptor", "NSWindow"] }
+objc2-service-management = { version = "0.3", features = ["SMAppService"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

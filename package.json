@@ -1,0 +1,14 @@
+{
+  "name": "jauge",
+  "productName": "Jauge",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Tes limites Claude en direct, dans la barre des menus (Tauri)",
+  "scripts": {
+    "test": "node tests/test.js && cargo test --manifest-path src-tauri/Cargo.toml",
+    "install-app": "node scripts/installer.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.319"
+  }
+}
