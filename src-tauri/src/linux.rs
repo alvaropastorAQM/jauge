@@ -9,7 +9,3 @@ pub fn inactif_depuis() -> f64 {
 pub fn ouvre_au_demarrage() -> bool {
     false
 }
-
-pub fn ouvrir_au_demarrage(_oui: bool) -> Result<(), String> {
-    Err("Opening at login is not available on Linux.".into())
-}

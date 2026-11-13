@@ -27,7 +27,9 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIcon;
+#[cfg(target_os = "macos")]
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Rect, RunEvent, State, Theme, WebviewUrl, WebviewWindow,
@@ -81,6 +83,8 @@ struct Jauge {
     taux_essai: Mutex<Option<Instant>>,
     taux_en_cours: AtomicBool,
     ferme_le: Mutex<Option<Instant>>,
+    /// Read by the tray click handler, which only exists on macOS.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     etait_ouvert: AtomicBool,
 }
 
