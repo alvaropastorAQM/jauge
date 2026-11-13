@@ -51,3 +51,31 @@ fs.writeFileSync(path.join(applications, 'jauge.desktop'), [
   '',
 ].join('\n'));
 console.log('Installed: ' + executable);
+
+/* Under WSL, WSLg does not always publish ~/.local/share/applications to the Windows Start menu: a Windows shortcut
+   launches Jauge through wslg.exe (no console window), with the icon converted to .ico by PowerShell. */
+const distribution = process.env.WSL_DISTRO_NAME;
+if (distribution) {
+  const icone = execFileSync('wslpath', ['-w', path.join(cible, 'icon.png')], { encoding: 'utf8' }).trim();
+  const ps = (s) => "'" + s.replace(/'/g, "''") + "'";
+  const script = [
+    'Add-Type -AssemblyName System.Drawing',
+    '$dossier = Join-Path $env:LOCALAPPDATA "Jauge"; New-Item -ItemType Directory -Force $dossier | Out-Null',
+    '$ico = Join-Path $dossier "jauge.ico"',
+    '$source = [System.Drawing.Image]::FromFile(' + ps(icone) + ')',
+    '$image = New-Object System.Drawing.Bitmap $source, 256, 256; $source.Dispose()',
+    '$png = New-Object System.IO.MemoryStream; $image.Save($png, [System.Drawing.Imaging.ImageFormat]::Png); $image.Dispose()',
+    '$o = $png.ToArray(); $f = [System.IO.File]::Create($ico); $w = New-Object System.IO.BinaryWriter $f',
+    // ICO header, one 256x256 entry (0 means 256), 32 bits, PNG payload right after the 22-byte header.
+    '$w.Write([UInt16]0); $w.Write([UInt16]1); $w.Write([UInt16]1); $w.Write([Byte]0); $w.Write([Byte]0); $w.Write([Byte]0); $w.Write([Byte]0)',
+    '$w.Write([UInt16]1); $w.Write([UInt16]32); $w.Write([UInt32]$o.Length); $w.Write([UInt32]22); $w.Write($o); $w.Close()',
+    '$lnk = Join-Path ([Environment]::GetFolderPath("Programs")) "Jauge.lnk"',
+    '$s = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)',
+    '$s.TargetPath = Join-Path $env:ProgramFiles "WSL\\wslg.exe"',
+    '$s.Arguments = ' + ps('-d ' + distribution + ' --cd ~ -- ' + executable),
+    '$s.IconLocation = $ico; $s.Description = "Your Claude limits, live"; $s.Save()',
+    'Write-Output $lnk',
+  ].join('; ');
+  const lnk = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { cwd: '/mnt/c', encoding: 'utf8' }).trim();
+  console.log('Start menu: ' + lnk);
+}
