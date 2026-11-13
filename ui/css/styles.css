@@ -95,7 +95,9 @@ body {
 
 /* ---------- Summary ---------- */
 
-.resume { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 2px; }
+.resume { padding: 0 2px; }
+.kpi-ligne { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.kpi-ligne .kpi-contexte { text-align: right; padding-bottom: 5px; }
 .kpi-libelle { font-size: 12px; color: var(--text-secondary); }
 .kpi-valeur {
   margin: 1px 0 3px; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15;

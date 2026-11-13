@@ -149,14 +149,6 @@
 
     const limites = R.aJour(etat.limites || [], t);
     const p = R.plusProche(limites);
-    const proche = $('proche');
-    if (p) {
-      proche.replaceChildren(chiffre(String(Math.round(p.pourcent)), '%'));
-      $('proche-contexte').textContent = R.libelle(p) + (p.reinit ? ' · ' + R.quand(p.reinit, t) + '\n' + 'resets ' + R.dans(p.reinit - t) : '');
-    } else {
-      proche.textContent = etat.erreur || etat.deconnecte ? '-' : '…';
-      $('proche-contexte').textContent = '';
-    }
     $('logo-arc').style.strokeDasharray = (p ? Math.min(100, p.pourcent) : 0) + ' 100';
 
     rendreLimites(limites, t);

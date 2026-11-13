@@ -530,15 +530,11 @@ fn theme_windows() -> Option<Theme> {
     Some(if valeur == "0x0" { Theme::Dark } else { Theme::Light })
 }
 
-/// Under WSLg the visible window comes out shorter than the size GTK reports (the page measures itself as fitting while
-/// its bottom is cut), so the Linux window asks for a margin that the panel background fills.
-const MARGE_LINUX: f64 = if cfg!(target_os = "macos") { 0.0 } else { 16.0 };
-
 /// The panel takes the height of its content.
 #[tauri::command]
 fn hauteur(h: f64, fenetre: WebviewWindow) {
     if h.is_finite() {
-        let _ = fenetre.set_size(LogicalSize::new(LARGEUR, (h.ceil() + MARGE_LINUX).clamp(120.0, 700.0)));
+        let _ = fenetre.set_size(LogicalSize::new(LARGEUR, h.ceil().clamp(120.0, 700.0)));
     }
 }
 
@@ -646,10 +642,14 @@ fn creer_panneau(app: &AppHandle, essai: bool, theme: Option<Theme>) -> tauri::R
 }
 
 fn main() {
-    // WebKitGTK's DMA-BUF renderer draws a blank window under WSLg; the shared-memory path works everywhere.
+    // Under WSLg, WebKitGTK's DMA-BUF renderer can draw a blank window, and its compositing mode leaves stale patches
+    // of earlier frames (text drawn before the bundled font loaded). The plain paths work everywhere; a value the
+    // user set wins.
     #[cfg(target_os = "linux")]
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    for variable in ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DISABLE_COMPOSITING_MODE"] {
+        if std::env::var_os(variable).is_none() {
+            std::env::set_var(variable, "1");
+        }
     }
     let essai_dans = std::env::var_os("JAUGE_ESSAI").map(PathBuf::from);
     let demo = essai_dans.is_some() && std::env::var_os("JAUGE_DEMO").is_some();
