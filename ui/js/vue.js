@@ -37,7 +37,9 @@
   }).format(usdParEuro ? usd / usdParEuro : usd);
 
   const cle = l => [l.groupe, l.type, l.modele, l.surface].join('|');
-  const nomForfait = f => (f ? f.charAt(0).toUpperCase() + f.slice(1) : '');
+  /* The badge names the tier when it has a name of its own, otherwise the plan. */
+  const NOMS_NIVEAU = { max_20x: 'Ultra' };
+  const nomForfait = (f, niveau) => NOMS_NIVEAU[niveau] || (f ? f.charAt(0).toUpperCase() + f.slice(1) : '');
   const heure = t => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 
   function creerCarte(l, grande) {
@@ -134,7 +136,7 @@
     const frais = etat.releve && t - etat.releve < 150000 && !etat.erreur;
 
     $('forfait').hidden = !etat.forfait;
-    $('forfait').textContent = nomForfait(etat.forfait);
+    $('forfait').textContent = nomForfait(etat.forfait, etat.niveau);
     $('direct').className = 'direct' + (frais ? ' frais' : '') + (etat.enCours ? ' actif' : '');
     $('direct-texte').textContent = frais ? 'live' : etat.deconnecte ? 'signed out' : etat.releve ? 'updated at ' + heure(etat.releve) : etat.erreur ? 'offline' : 'connecting…';
 

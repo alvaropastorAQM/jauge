@@ -49,6 +49,7 @@ const PLUS_CONNECTE: &str = "Claude Code is no longer signed in to your account 
 #[serde(rename_all = "camelCase")]
 struct Etat {
     forfait: Option<String>,
+    niveau: Option<String>,
     limites: Vec<Limite>,
     releve: Option<i64>,
     erreur: Option<String>,
@@ -256,10 +257,15 @@ impl Jauge {
         if r["rate_limits_available"].as_bool() != Some(true) || !rl.is_object() {
             return Err(perdue("Claude did not return your limits.".into()));
         }
+        // The tier is read once per run, outside the lock: it costs a second Claude process.
+        let niveau = if verrou(&self.etat).niveau.is_none() { self.claude.niveau() } else { None };
         let t = maintenant_ms();
         let mut e = verrou(&self.etat);
         e.deconnecte = false;
         e.forfait = r["subscription_type"].as_str().map(str::to_owned);
+        if niveau.is_some() {
+            e.niveau = niveau;
+        }
         e.limites = fusionner(lire_limites(rl), &e.limites, t);
         e.releve = Some(t);
         e.erreur = None;

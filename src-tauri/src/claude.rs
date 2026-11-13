@@ -117,6 +117,12 @@ impl Claude {
         serde_json::from_str::<Value>(&s).ok()?["loggedIn"].as_bool()
     }
 
+    /// The plan tier (`max_20x`…), which `get_usage` does not give: its `subscription_type` only says `max`.
+    pub fn niveau(&self) -> Option<String> {
+        let s = self.executer(&["auth", "status", "--json"], Duration::from_secs(20))?;
+        serde_json::from_str::<Value>(&s).ok()?["planTier"].as_str().map(str::to_owned)
+    }
+
     /// The official sign-in, like Fil: it opens in the browser, no credentials go through Jauge.
     pub fn se_connecter(&self) {
         self.executer(&["auth", "login"], Duration::from_secs(5 * 60));
