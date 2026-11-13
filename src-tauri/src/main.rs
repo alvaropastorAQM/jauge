@@ -512,11 +512,33 @@ fn connecter(j: State<'_, Arc<Jauge>>) {
     j.se_connecter();
 }
 
+/// The close button of the panel on Linux, where there is no tray menu to quit from.
+#[tauri::command]
+fn quitter(app: AppHandle) {
+    app.exit(0);
+}
+
+/// Under WSL, the Windows app theme (dark or light), read from the registry through interop; elsewhere, none.
+fn theme_windows() -> Option<Theme> {
+    std::env::var_os("WSL_DISTRO_NAME")?;
+    let sortie = Command::new("reg.exe")
+        .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "/v", "AppsUseLightTheme"])
+        .output()
+        .ok()?;
+    let texte = String::from_utf8_lossy(&sortie.stdout);
+    let valeur = texte.lines().find(|l| l.contains("AppsUseLightTheme"))?.split_whitespace().last()?;
+    Some(if valeur == "0x0" { Theme::Dark } else { Theme::Light })
+}
+
+/// Under WSLg the visible window comes out shorter than the size GTK reports (the page measures itself as fitting while
+/// its bottom is cut), so the Linux window asks for a margin that the panel background fills.
+const MARGE_LINUX: f64 = if cfg!(target_os = "macos") { 0.0 } else { 16.0 };
+
 /// The panel takes the height of its content.
 #[tauri::command]
 fn hauteur(h: f64, fenetre: WebviewWindow) {
     if h.is_finite() {
-        let _ = fenetre.set_size(LogicalSize::new(LARGEUR, h.ceil().clamp(120.0, 700.0)));
+        let _ = fenetre.set_size(LogicalSize::new(LARGEUR, (h.ceil() + MARGE_LINUX).clamp(120.0, 700.0)));
     }
 }
 
@@ -602,14 +624,23 @@ fn creer_panneau(app: &AppHandle, essai: bool, theme: Option<Theme>) -> tauri::R
         // The macOS glass (like the panels of the system icons), with rounded corners.
         b.transparent(true).shadow(true).effects(EffectsBuilder::new().effect(Effect::Popover).state(EffectState::Active).radius(12.0).build())
     } else {
-        // Without a tray (WSLg has none), the panel is an ordinary window that stays open.
-        b.initialization_script("window.JAUGE_OPAQUE = true;")
+        // Without a tray (WSLg has none), the panel is a window that stays open. No native title bar: the panel header
+        // is the drag area and carries the close button, and the theme follows Windows when under WSL.
+        let theme = theme.or_else(theme_windows);
+        let nom_theme = match theme {
+            Some(Theme::Dark) => "'dark'",
+            Some(Theme::Light) => "'light'",
+            _ => "null",
+        };
+        b.initialization_script(format!("window.JAUGE_OPAQUE = true; window.JAUGE_THEME = {nom_theme};"))
             .visible(true)
             .focused(true)
-            .decorations(true)
             .always_on_top(false)
             .skip_taskbar(false)
             .visible_on_all_workspaces(false)
+            // GTK ignores set_size on a window that is not resizable: the panel could not take its content's height.
+            .resizable(true)
+            .theme(theme)
     };
     b.build()
 }
@@ -642,7 +673,7 @@ fn main() {
         }));
     }
     let app = builder
-        .invoke_handler(tauri::generate_handler![etat, actualiser, connecter, hauteur])
+        .invoke_handler(tauri::generate_handler![etat, actualiser, connecter, hauteur, quitter])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);

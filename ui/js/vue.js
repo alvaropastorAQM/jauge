@@ -161,18 +161,21 @@
 
     rendreLimites(limites, t);
 
-    const pied = $('pied');
-    pied.classList.toggle('erreur', Boolean(etat.erreur && etat.releve));
-    pied.classList.toggle('actif', Boolean(etat.enCours));
-    $('pied-texte').textContent = etat.enCours ? 'Refreshing…'
-      : etat.erreur && etat.releve ? 'No response from Claude: figures from ' + heure(etat.releve) + '.'
-      : etat.releve ? 'Updated at ' + heure(etat.releve) + ' · every minute' : '';
+    /* The update time lives in the tooltip of the live dot; the footer only appears to explain stale figures. */
+    $('direct').title = etat.enCours ? 'Refreshing…' : etat.releve ? 'Updated at ' + heure(etat.releve) + ' · every minute' : '';
+    $('actualiser').classList.toggle('actif', Boolean(etat.enCours));
+    const vieux = Boolean(etat.erreur && etat.releve);
+    $('pied').hidden = !vieux;
+    $('pied-texte').textContent = vieux ? 'No response from Claude: figures from ' + heure(etat.releve) + '.' : '';
   }
 
   /* The panel takes the height of its content. */
   new ResizeObserver(() => window.jauge.hauteur($('panneau').getBoundingClientRect().height)).observe($('panneau'));
 
   $('actualiser').addEventListener('click', () => window.jauge.actualiser());
+  /* Without a native title bar (Linux), the panel carries its own way out. */
+  $('fermer').hidden = !window.JAUGE_OPAQUE;
+  $('fermer').addEventListener('click', () => window.jauge.quitter());
   window.jauge.surEtat(e => { etat = e; rendre(); });
   window.jauge.charger().then(e => { etat = e; rendre(); });
   /* Countdowns and the elapsed-time tick move forward even without a new reading. */

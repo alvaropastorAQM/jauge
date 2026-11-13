@@ -32,8 +32,9 @@
   --font-ui: 'Inter', system-ui, sans-serif;
 }
 
+/* data-theme="dark": the window asks for dark when the webview cannot tell (WebKitGTK under WSLg reports light). */
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     color-scheme: light;
     --accent-soft: rgba(0,0,0,0.06);
     --accent-rim: rgba(0,0,0,0.32);
@@ -70,7 +71,7 @@ body {
   -webkit-font-smoothing: antialiased; user-select: none; cursor: default; overflow: hidden;
 }
 
-.panneau { display: flex; flex-direction: column; gap: 12px; padding: 12px 12px 8px; }
+.panneau { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
 
 /* ---------- Header ---------- */
 
@@ -162,11 +163,12 @@ body {
 /* ---------- Footer ---------- */
 
 .pied {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 6px 0 0 2px; border-top: 1px solid var(--border-subtle);
-  font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--warning); font-variant-numeric: tabular-nums;
 }
-.pied.erreur #pied-texte { color: var(--warning); }
+.pied[hidden] { display: none; }
+.actions { display: flex; align-items: center; gap: 4px; }
+.actions .direct { margin-right: 4px; }
 .btn-carre {
   display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
   background: transparent; color: var(--text-secondary);
@@ -175,7 +177,8 @@ body {
 .btn-carre:active { transform: scale(0.94); transition-duration: 80ms; }
 .btn-carre:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent-rim), 0 0 0 3px var(--accent-soft); }
 .btn-carre svg { width: 14px; height: 14px; }
-.pied.actif .btn-carre svg { animation: tourner 0.9s linear infinite; }
+.btn-carre.actif svg { animation: tourner 0.9s linear infinite; }
+.btn-carre[hidden] { display: none; }
 @keyframes tourner { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {

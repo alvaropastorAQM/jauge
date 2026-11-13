@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "The panel reads Jauge's state and receives its updates.",
   "windows": ["panneau"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
 }
