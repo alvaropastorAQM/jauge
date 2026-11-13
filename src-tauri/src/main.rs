@@ -615,6 +615,11 @@ fn creer_panneau(app: &AppHandle, essai: bool, theme: Option<Theme>) -> tauri::R
 }
 
 fn main() {
+    // WebKitGTK's DMA-BUF renderer draws a blank window under WSLg; the shared-memory path works everywhere.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     let essai_dans = std::env::var_os("JAUGE_ESSAI").map(PathBuf::from);
     let demo = essai_dans.is_some() && std::env::var_os("JAUGE_DEMO").is_some();
     let theme = match std::env::var("JAUGE_THEME").as_deref() {
@@ -624,10 +629,15 @@ fn main() {
     };
     let mut builder = tauri::Builder::default();
     if essai_dans.is_none() {
-        // A single Jauge: a second launch shows the first one's panel, then stops.
+        // A single Jauge: a second launch shows the first one's panel, then stops. On macOS it toggles, like the tray
+        // icon; on Linux the launcher is the only way back to the window, so it always shows it.
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _dossier| {
             if let Some(j) = app.try_state::<Arc<Jauge>>() {
-                j.basculer();
+                if cfg!(target_os = "macos") {
+                    j.basculer();
+                } else {
+                    j.ouvrir(None);
+                }
             }
         }));
     }
